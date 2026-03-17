@@ -1,0 +1,37 @@
+name: OpenClawManagementIOSApp
+options:
+  deploymentTarget:
+    iOS: 18.0
+packages:
+  OpenClawKit:
+    path: ../../shared/OpenClawKit
+targets:
+  OpenClawManagementIOSApp:
+    type: application
+    platform: iOS
+    info:
+      path: null
+      properties:
+        CFBundleDisplayName: OpenClaw iOS
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UIRequiresFullScreen: true
+    sources:
+      - ../Sources/OpenClawManagementIOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.openclaw.ios.test.bpc
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: Apple Development
+        DEVELOPMENT_TEAM: RWRPFBTAZS
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "6.0"
+        DEVELOPMENT_ASSET_PATHS: ""
+    dependencies:
+      - package: OpenClawKit
+        product: OpenClawKit
+      - package: OpenClawKit
+        product: OpenClawProtocol
+      - package: OpenClawKit
+        product: OpenClawChatUI
