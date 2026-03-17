@@ -62,6 +62,9 @@ final class GatewayService {
         let token = settings.loadToken()
         self.remoteAddress = url.host ?? url.absoluteString
         self.connectionState = .connecting
+        let gatewayClientID = settings.gatewayClientIdOverride
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedClientID = gatewayClientID.isEmpty ? "openclaw-macos" : gatewayClientID
 
         let options = GatewayConnectOptions(
             role: "operator",
@@ -77,7 +80,7 @@ final class GatewayService {
             commands: [],
             permissions: [:],
             // Gateway schema validates client.id against known constants.
-            clientId: "openclaw-macos",
+            clientId: resolvedClientID,
             clientMode: "ui",
             clientDisplayName: "Broder Labs iOS")
 
@@ -285,7 +288,7 @@ final class GatewayService {
             || lower.contains("must be equal to constant")
             || lower.contains("must match a schema in anyof")
         {
-            return "\(message)\nHint: this gateway validates connect `client.id`. This app connects as `openclaw-macos`."
+            return "\(message)\nHint: this gateway validates connect `client.id`. Adjust it via settings import or `gateway.clientIdOverride`."
         }
         return message
     }

@@ -86,6 +86,43 @@ final class AppCoreTests: XCTestCase {
         XCTAssertEqual(MainTab.allowed(for: .operator), [.dashboard, .agents, .sessions, .chat])
         XCTAssertEqual(MainTab.allowed(for: .basic), [.dashboard, .agents, .sessions])
     }
+
+    func testLegacyIOSManualGatewaySettingsAreImported() {
+        let suiteName = "OpenClawManagementIOSTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set(true, forKey: "gateway.manual.enabled")
+        defaults.set("gateway.tailnet.ts.net", forKey: "gateway.manual.host")
+        defaults.set(443, forKey: "gateway.manual.port")
+        defaults.set(true, forKey: "gateway.manual.tls")
+        defaults.set(true, forKey: "gateway.autoconnect")
+        defaults.set("openclaw-ios", forKey: "gateway.manual.clientId")
+
+        let settings = SettingsStore(defaults: defaults, secureStore: InMemorySecureStringStore())
+
+        XCTAssertEqual(settings.connectionMode, .local)
+        XCTAssertEqual(settings.gatewayHost, "gateway.tailnet.ts.net")
+        XCTAssertEqual(settings.gatewayPort, 443)
+        XCTAssertTrue(settings.gatewayUseTLS)
+        XCTAssertTrue(settings.autoConnect)
+        XCTAssertEqual(settings.gatewayClientIdOverride, "openclaw-ios")
+    }
+
+    func testLegacyIOSLastManualGatewaySettingsFallbackImport() {
+        let suiteName = "OpenClawManagementIOSTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set("manual", forKey: "gateway.last.kind")
+        defaults.set("relay.tailnet.ts.net", forKey: "gateway.last.host")
+        defaults.set(443, forKey: "gateway.last.port")
+        defaults.set(true, forKey: "gateway.last.tls")
+
+        let settings = SettingsStore(defaults: defaults, secureStore: InMemorySecureStringStore())
+
+        XCTAssertEqual(settings.gatewayHost, "relay.tailnet.ts.net")
+        XCTAssertEqual(settings.gatewayPort, 443)
+        XCTAssertEqual(settings.gatewayURL?.absoluteString, "wss://relay.tailnet.ts.net:443")
+    }
 }
 
 private extension AppCoreTests {

@@ -55,8 +55,11 @@ private let remoteAllowedSchemes: Set<String> = ["ws", "wss"]
 final class SettingsStore {
     
     private static let keychainService = "ai.openclaw.management"
+    private static let legacyGatewayKeychainService = "ai.openclaw.gateway"
     private static let tokenAccount = "gateway-token"
     private static let instanceIdAccount = "instance-id"
+    private static let legacyGatewayImportAttemptVersionKey = "migration.iosGatewayImportAttemptVersion"
+    private static let legacyGatewayImportSchemaVersion = 1
 
     private let defaults: UserDefaults
     private let secureStore: any SecureStringStore
@@ -97,6 +100,10 @@ final class SettingsStore {
         didSet { defaults.set(autoConnect, forKey: "gateway.autoConnect") }
     }
 
+    var gatewayClientIdOverride: String {
+        didSet { defaults.set(gatewayClientIdOverride, forKey: "gateway.clientIdOverride") }
+    }
+
     var isDarkMode: Bool {
         didSet { defaults.set(isDarkMode, forKey: "ui.isDarkMode") }
     }
@@ -123,11 +130,13 @@ final class SettingsStore {
         self.remoteSSHTarget = defaults.string(forKey: "gateway.remote.sshTarget") ?? ""
         self.tailscaleMode = defaults.string(forKey: "gateway.tailscale.mode") ?? "off"
         self.autoConnect = defaults.bool(forKey: "gateway.autoConnect")
+        self.gatewayClientIdOverride = defaults.string(forKey: "gateway.clientIdOverride") ?? ""
         self.isDarkMode = defaults.object(forKey: "ui.isDarkMode") as? Bool ?? true
         self.miniverseEnabled = defaults.bool(forKey: "miniverse.enabled")
         self.miniversePort = defaults.integer(forKey: "miniverse.port").nonZero ?? 4321
 
         self.ensureInstanceId()
+        self.performLegacyIOSGatewayImportIfNeeded()
     }
 
     init(defaults: UserDefaults, secureStore: any SecureStringStore) {
@@ -143,11 +152,13 @@ final class SettingsStore {
         self.remoteSSHTarget = defaults.string(forKey: "gateway.remote.sshTarget") ?? ""
         self.tailscaleMode = defaults.string(forKey: "gateway.tailscale.mode") ?? "off"
         self.autoConnect = defaults.bool(forKey: "gateway.autoConnect")
+        self.gatewayClientIdOverride = defaults.string(forKey: "gateway.clientIdOverride") ?? ""
         self.isDarkMode = defaults.object(forKey: "ui.isDarkMode") as? Bool ?? true
         self.miniverseEnabled = defaults.bool(forKey: "miniverse.enabled")
         self.miniversePort = defaults.integer(forKey: "miniverse.port").nonZero ?? 4321
 
         self.ensureInstanceId()
+        self.performLegacyIOSGatewayImportIfNeeded()
     }
 
     var gatewayURL: URL? {
@@ -246,6 +257,83 @@ final class SettingsStore {
         if secureStore.loadString(account: Self.instanceIdAccount) == nil {
             secureStore.saveString(UUID().uuidString, account: Self.instanceIdAccount)
         }
+    }
+
+    private func performLegacyIOSGatewayImportIfNeeded() {
+        let attemptedVersion = defaults.integer(forKey: Self.legacyGatewayImportAttemptVersionKey)
+        guard attemptedVersion < Self.legacyGatewayImportSchemaVersion else { return }
+        defer {
+            defaults.set(Self.legacyGatewayImportSchemaVersion, forKey: Self.legacyGatewayImportAttemptVersionKey)
+        }
+
+        guard !hasAnyConnectionConfiguration else { return }
+
+        let legacyManualEnabled = defaults.bool(forKey: "gateway.manual.enabled")
+        let legacyManualHost = defaults.string(forKey: "gateway.manual.host")?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let legacyManualPort = defaults.integer(forKey: "gateway.manual.port")
+        let legacyManualTLS = defaults.object(forKey: "gateway.manual.tls") as? Bool ?? true
+
+        if legacyManualEnabled, !legacyManualHost.isEmpty {
+            applyLegacyManualConnection(host: legacyManualHost, port: legacyManualPort, useTLS: legacyManualTLS)
+        } else {
+            let lastKind = defaults.string(forKey: "gateway.last.kind")?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let lastHost = defaults.string(forKey: "gateway.last.host")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let lastPort = defaults.integer(forKey: "gateway.last.port")
+            let lastTLS = defaults.object(forKey: "gateway.last.tls") as? Bool ?? legacyManualTLS
+
+            if (lastKind == "manual" || lastKind == nil), !lastHost.isEmpty {
+                applyLegacyManualConnection(host: lastHost, port: lastPort, useTLS: lastTLS)
+            }
+        }
+
+        if let legacyAutoConnect = defaults.object(forKey: "gateway.autoconnect") as? Bool {
+            autoConnect = legacyAutoConnect
+        } else if gatewayURL != nil {
+            // Preserve prior iOS behavior where gateway reconnect was typically automatic.
+            autoConnect = true
+        }
+
+        let legacyClientId = defaults.string(forKey: "gateway.manual.clientId")?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !legacyClientId.isEmpty {
+            gatewayClientIdOverride = legacyClientId
+        }
+
+        let legacyInstanceID = defaults.string(forKey: "node.instanceId")?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !legacyInstanceID.isEmpty, loadToken()?.isEmpty ?? true {
+            let legacyTokenAccount = "gateway-token.\(legacyInstanceID)"
+            if let legacyToken = KeychainStore.loadString(
+                service: Self.legacyGatewayKeychainService,
+                account: legacyTokenAccount
+            )?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !legacyToken.isEmpty
+            {
+                saveToken(legacyToken)
+            }
+        }
+    }
+
+    private func applyLegacyManualConnection(host: String, port: Int, useTLS: Bool) {
+        let resolvedPort = (1...65535).contains(port) ? port : (useTLS ? 443 : 18789)
+        if host.contains("://") {
+            let normalized = Self.normalizedRemoteURL(host)
+            if Self.validWebSocketURL(normalized) != nil {
+                connectionMode = .remote
+                remoteTransport = .direct
+                remoteURL = normalized
+                gatewayHost = ""
+                gatewayPort = resolvedPort
+                gatewayUseTLS = useTLS
+                return
+            }
+        }
+
+        connectionMode = .local
+        gatewayHost = host
+        gatewayPort = resolvedPort
+        gatewayUseTLS = useTLS
     }
 }
 
