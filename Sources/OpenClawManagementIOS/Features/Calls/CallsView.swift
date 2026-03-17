@@ -108,7 +108,7 @@ struct CallsView: View {
             }
             .background(OC.Colors.background)
             .navigationTitle("Voice Ops")
-            .navigationBarHidden(true)
+            .ocNavigationBarHidden(true)
         }
     }
     

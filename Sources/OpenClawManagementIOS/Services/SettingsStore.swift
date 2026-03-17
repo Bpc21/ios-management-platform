@@ -48,10 +48,11 @@ final class InMemorySecureStringStore: SecureStringStore {
     }
 }
 
+private let remoteAllowedSchemes: Set<String> = ["ws", "wss"]
+
 @MainActor
 @Observable
 final class SettingsStore {
-    static let shared = SettingsStore()
     
     private static let keychainService = "ai.openclaw.management"
     private static let tokenAccount = "gateway-token"
@@ -152,15 +153,64 @@ final class SettingsStore {
     var gatewayURL: URL? {
         switch connectionMode {
         case .remote:
-            let trimmedRemoteURL = remoteURL.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmedRemoteURL.isEmpty else { return nil }
-            return URL(string: trimmedRemoteURL)
+            let normalized = Self.normalizedRemoteURL(remoteURL)
+            guard !normalized.isEmpty else { return nil }
+            if normalized != remoteURL {
+                remoteURL = normalized
+            }
+            return Self.validWebSocketURL(normalized)
         case .local:
             let host = gatewayHost.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !host.isEmpty else { return nil }
             let scheme = gatewayUseTLS ? "wss" : "ws"
-            return URL(string: "\(scheme)://\(host):\(gatewayPort)")
+            return Self.validWebSocketURL("\(scheme)://\(host):\(gatewayPort)")
         }
+    }
+
+    var gatewayURLValidationMessage: String? {
+        switch connectionMode {
+        case .remote:
+            let normalized = Self.normalizedRemoteURL(remoteURL)
+            if normalized.isEmpty {
+                return "Invalid gateway URL. Set a remote URL like `wss://your-gateway.example.com`. Current value is empty."
+            }
+            if Self.validWebSocketURL(normalized) == nil {
+                return "Invalid gateway URL `\(remoteURL)`. Expected a full websocket URL using `ws://` or `wss://`."
+            }
+            return nil
+        case .local:
+            let host = gatewayHost.trimmingCharacters(in: .whitespacesAndNewlines)
+            if host.isEmpty {
+                return "Invalid gateway URL. Local mode requires a gateway host."
+            }
+            let scheme = gatewayUseTLS ? "wss" : "ws"
+            if Self.validWebSocketURL("\(scheme)://\(host):\(gatewayPort)") == nil {
+                return "Invalid local gateway URL derived from host `\(gatewayHost)` and port `\(gatewayPort)`."
+            }
+            return nil
+        }
+    }
+
+    static func normalizedRemoteURL(_ rawValue: String) -> String {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        if trimmed.contains("://") {
+            return trimmed
+        }
+        return "wss://\(trimmed)"
+    }
+
+    static func validWebSocketURL(_ rawValue: String) -> URL? {
+        let allowedSchemes: Set<String> = ["ws", "wss"]
+        guard let url = URL(string: rawValue),
+              let scheme = url.scheme?.lowercased(),
+              allowedSchemes.contains(scheme),
+              let host = url.host,
+              !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return nil
+        }
+        return url
     }
 
     var instanceId: String {

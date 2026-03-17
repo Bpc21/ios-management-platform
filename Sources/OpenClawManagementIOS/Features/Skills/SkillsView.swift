@@ -39,7 +39,7 @@ struct SkillsView: View {
                 .padding(OC.Spacing.md)
             }
             .navigationTitle("Skills")
-            .navigationBarTitleDisplayMode(.inline)
+            .ocNavigationBarTitleDisplayModeInline()
             .background(OC.Colors.background)
             .task {
                 loadData()

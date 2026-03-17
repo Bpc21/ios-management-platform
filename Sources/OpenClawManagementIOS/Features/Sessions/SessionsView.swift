@@ -16,7 +16,7 @@ struct SessionsView: View {
                 .padding(OC.Spacing.md)
             }
             .navigationTitle("Sessions")
-            .navigationBarTitleDisplayMode(.inline)
+            .ocNavigationBarTitleDisplayModeInline()
         }
     }
 }

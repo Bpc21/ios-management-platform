@@ -26,7 +26,7 @@ struct DevicesView: View {
                 .padding(OC.Spacing.md)
             }
             .navigationTitle("Devices")
-            .navigationBarTitleDisplayMode(.inline)
+            .ocNavigationBarTitleDisplayModeInline()
             .background(OC.Colors.background)
             .task {
                 do {

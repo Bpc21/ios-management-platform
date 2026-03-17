@@ -2,27 +2,27 @@ import Foundation
 import OpenClawProtocol
 import Observation
 
-struct UsersAgentSummary: Hashable {
+struct UsersAgentSummary: Hashable, @unchecked Sendable {
     let id: String
     let displayName: String
     let workspace: String?
     let skills: [String]
 }
 
-struct UsersOverviewRow: Identifiable, Hashable {
+struct UsersOverviewRow: Identifiable, Hashable, @unchecked Sendable {
     let id: String
     let phone: String
     let isAllowlisted: Bool
     let agents: [UsersAgentSummary]
 }
 
-struct GatewayConfigSnapshotData {
+struct GatewayConfigSnapshotData: @unchecked Sendable {
     let hash: String
     let raw: String
     let config: [String: Any]
 }
 
-struct UsersOverviewData {
+struct UsersOverviewData: @unchecked Sendable {
     let rows: [UsersOverviewRow]
     let allowlist: [String]
     let configSnapshot: GatewayConfigSnapshotData

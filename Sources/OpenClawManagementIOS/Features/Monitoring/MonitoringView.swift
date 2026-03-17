@@ -64,7 +64,7 @@ struct MonitoringView: View {
                 .background(OC.Colors.background)
             }
             .navigationTitle("Monitoring")
-            .navigationBarTitleDisplayMode(.inline)
+            .ocNavigationBarTitleDisplayModeInline()
             .background(OC.Colors.background)
         }
     }

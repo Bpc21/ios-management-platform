@@ -27,7 +27,7 @@ struct ChatContainerView: View {
                 }
             }
             .navigationTitle("Main Chat")
-            .navigationBarTitleDisplayMode(.inline)
+            .ocNavigationBarTitleDisplayModeInline()
         }
         .task(id: gateway.connectionState.isConnected) {
             setupTransport()

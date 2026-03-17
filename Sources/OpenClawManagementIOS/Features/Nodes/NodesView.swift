@@ -54,7 +54,7 @@ struct NodesView: View {
                 .padding(OC.Spacing.md)
             }
             .navigationTitle("Nodes")
-            .navigationBarTitleDisplayMode(.inline)
+            .ocNavigationBarTitleDisplayModeInline()
             .background(OC.Colors.background)
             .task {
                 loadData()

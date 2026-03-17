@@ -90,7 +90,7 @@ struct ToolsView: View {
                 .background(OC.Colors.background)
             }
             .navigationTitle("Tools")
-            .navigationBarTitleDisplayMode(.inline)
+            .ocNavigationBarTitleDisplayModeInline()
             .background(OC.Colors.background)
             .task {
                 loadData()

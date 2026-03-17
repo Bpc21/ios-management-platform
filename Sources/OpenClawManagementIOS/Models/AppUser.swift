@@ -1,5 +1,4 @@
 import Foundation
-import SwiftData
 
 enum AppUserRole: String, Codable, CaseIterable, Sendable {
     case admin
@@ -23,18 +22,17 @@ enum AppUserRole: String, Codable, CaseIterable, Sendable {
     }
 }
 
-@Model
-final class AppUser {
-    @Attribute(.unique) var id: String
-    @Attribute(.unique) var username: String
+struct AppUser: Identifiable, Hashable, Codable, Sendable {
+    var id: String
+    var username: String
     var displayName: String
-    var passwordHash: String
-    var salt: String
     var roleRaw: String
     var phone: String?
     var isAllowlisted: Bool
     var createdAt: Date
     var lastLoginAt: Date?
+    var agentAssignments: [String]
+    var permissions: [String]
 
     var role: AppUserRole {
         get { AppUserRole(rawValue: roleRaw) ?? .basic }
@@ -45,20 +43,23 @@ final class AppUser {
         id: String = UUID().uuidString,
         username: String,
         displayName: String,
-        passwordHash: String,
-        salt: String,
         role: AppUserRole = .basic,
         phone: String? = nil,
-        isAllowlisted: Bool = false
+        isAllowlisted: Bool = false,
+        createdAt: Date = .now,
+        lastLoginAt: Date? = nil,
+        agentAssignments: [String] = [],
+        permissions: [String] = []
     ) {
         self.id = id
         self.username = username
         self.displayName = displayName
-        self.passwordHash = passwordHash
-        self.salt = salt
         self.roleRaw = role.rawValue
         self.phone = phone
         self.isAllowlisted = isAllowlisted
-        self.createdAt = Date()
+        self.createdAt = createdAt
+        self.lastLoginAt = lastLoginAt
+        self.agentAssignments = agentAssignments
+        self.permissions = permissions
     }
 }

@@ -45,7 +45,7 @@ struct LogsView: View {
                 .background(OC.Colors.surface) // Slight offset from pure black
             }
             .navigationTitle("Logs")
-            .navigationBarTitleDisplayMode(.inline)
+            .ocNavigationBarTitleDisplayModeInline()
             .background(OC.Colors.background)
             .onDisappear {
                 isTailing = false

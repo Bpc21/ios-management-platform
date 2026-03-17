@@ -26,7 +26,7 @@ struct CronView: View {
                 .padding(OC.Spacing.md)
             }
             .navigationTitle("Cron Jobs")
-            .navigationBarTitleDisplayMode(.inline)
+            .ocNavigationBarTitleDisplayModeInline()
             .background(OC.Colors.background)
             .task {
                 do {

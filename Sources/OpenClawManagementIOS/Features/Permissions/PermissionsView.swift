@@ -69,7 +69,7 @@ struct PermissionsView: View {
                 .padding(OC.Spacing.md)
             }
             .navigationTitle("Permissions")
-            .navigationBarHidden(true)
+            .ocNavigationBarHidden(true)
             .background(OC.Colors.background)
             .task {
                 loadData()

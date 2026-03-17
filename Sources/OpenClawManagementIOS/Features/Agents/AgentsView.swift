@@ -2,7 +2,7 @@ import SwiftUI
 import OpenClawKit
 import OpenClawProtocol
 
-extension AgentSummary: Identifiable {}
+extension AgentSummary: @retroactive Identifiable {}
 
 struct AgentsView: View {
     @Environment(GatewayService.self) private var gateway
@@ -31,7 +31,7 @@ struct AgentsView: View {
                 .padding(OC.Spacing.md)
             }
             .navigationTitle("Agents")
-            .navigationBarHidden(true)
+            .ocNavigationBarHidden(true)
             .sheet(item: $selectedAgent) { agent in
                 AgentDetailView(agent: agent)
             }
@@ -115,9 +115,9 @@ struct AgentDetailView: View {
             }
             .background(OC.Colors.background)
             .navigationTitle(agent.name ?? "Agent Details")
-            .navigationBarTitleDisplayMode(.inline)
+            .ocNavigationBarTitleDisplayModeInline()
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
                         dismiss()
                     }

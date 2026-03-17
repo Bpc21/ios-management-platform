@@ -1,41 +1,43 @@
 import SwiftUI
-import SwiftData
 import OpenClawKit
 
 @main
 struct OpenClawManagementIOS: App {
-    private var settingsStore = SettingsStore.shared
+    @State private var settingsStore = SettingsStore()
     @State private var gateway: GatewayService
     @State private var authService: AuthService
-    
+
     init() {
-        let container = PersistenceContainer.shared
-        let auth = AuthService(modelContext: container.mainContext)
-        _authService = State(wrappedValue: auth)
-        
+        let settings = SettingsStore()
         let gw = GatewayService()
+        let auth = AuthService(gateway: gw, settings: settings)
+        _settingsStore = State(initialValue: settings)
         _gateway = State(wrappedValue: gw)
+        _authService = State(wrappedValue: auth)
     }
-    
+
     var body: some Scene {
         WindowGroup {
-            Group {
-                // If not authenticated, we'd shoe Login/Onboarding. For now, we skip straight to main UI shell.
-                ContentView()
-            }
-            .environment(settingsStore)
-            .environment(gateway)
-            .environment(authService)
-            .preferredColorScheme(.dark) // The Executive Dashboard prefers true blacks
-            .onAppear {
-                Task {
-                    authService.restoreSession()
-                    if !settingsStore.gatewayHost.isEmpty {
+            authGatedContent
+                .environment(settingsStore)
+                .environment(gateway)
+                .environment(authService)
+                .preferredColorScheme(.dark)
+                .task {
+                    if settingsStore.autoConnect, settingsStore.gatewayURL != nil {
                         await gateway.connect(settings: settingsStore)
                     }
+                    await authService.restoreSession()
                 }
-            }
         }
-        .modelContainer(PersistenceContainer.shared)
+    }
+
+    @ViewBuilder
+    private var authGatedContent: some View {
+        if authService.isAuthenticated {
+            ContentView()
+        } else {
+            LoginView()
+        }
     }
 }

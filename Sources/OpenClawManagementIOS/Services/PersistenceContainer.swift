@@ -13,7 +13,6 @@ final class PersistenceContainer {
 
     static func makeContainer() throws -> ModelContainer {
         let schema = Schema([
-            AppUser.self,
         ])
 
         let storeURL = URL.applicationSupportDirectory

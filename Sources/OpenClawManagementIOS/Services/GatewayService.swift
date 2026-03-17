@@ -51,7 +51,10 @@ final class GatewayService {
         self.retryTask = nil
         
         guard let url = settings.gatewayURL else {
-            self.connectionState = .error("Invalid gateway URL")
+            self.connectionState = .error(
+                settings.gatewayURLValidationMessage
+                    ?? "Invalid gateway URL. Expected a websocket URL using `ws://` or `wss://`."
+            )
             return
         }
 
@@ -74,7 +77,7 @@ final class GatewayService {
             // Gateway schema validates client.id against known constants.
             clientId: "openclaw-macos",
             clientMode: "ui",
-            clientDisplayName: "OpenClaw macOS")
+            clientDisplayName: "Broder Labs iOS")
 
         do {
             try await self.session.connect(
@@ -100,6 +103,11 @@ final class GatewayService {
                         ok: false,
                         error: OpenClawNodeError(code: .unavailable, message: "not a node"))
                 })
+            // GatewayNodeSession suppresses duplicate onConnected callbacks once a session is already live.
+            // A redundant connect() call should not leave the UI stuck in .connecting.
+            if case .connecting = self.connectionState {
+                self.handleConnected()
+            }
         } catch {
             let message = Self.friendlyConnectionErrorMessage(error.localizedDescription)
             self.connectionState = .error(message)
@@ -253,7 +261,7 @@ final class GatewayService {
             || lower.contains("must be equal to constant")
             || lower.contains("must match a schema in anyof")
         {
-            return "\(message)\nHint: this gateway validates connect `client.id`. Use a supported client id (this app uses `openclaw-macos`)."
+            return "\(message)\nHint: this gateway validates connect `client.id`. This app connects as `openclaw-macos`."
         }
         return message
     }
