@@ -174,12 +174,35 @@ struct EditUserSheet: View {
         errorText = nil
         Task {
             do {
+                let trimmedDisplayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmedOriginalDisplayName = user.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+                let displayNameUpdate = trimmedDisplayName == trimmedOriginalDisplayName ? nil : trimmedDisplayName
+
+                let trimmedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
+                let passwordUpdate = trimmedPassword.isEmpty ? nil : trimmedPassword
+
+                let roleUpdate = role == user.role ? nil : role
+
+                let normalizedPhone = normalizePhone(phone)
+                let normalizedOriginalPhone = normalizePhone(user.phone ?? "")
+                let phoneUpdate: String?
+                if normalizedPhone == normalizedOriginalPhone {
+                    phoneUpdate = nil
+                } else {
+                    phoneUpdate = phone
+                }
+
+                if displayNameUpdate == nil, passwordUpdate == nil, roleUpdate == nil, phoneUpdate == nil {
+                    dismiss()
+                    return
+                }
+
                 _ = try await auth.updateUser(
                     user,
-                    displayName: displayName,
-                    password: password.isEmpty ? nil : password,
-                    role: role,
-                    phone: phone
+                    displayName: displayNameUpdate,
+                    password: passwordUpdate,
+                    role: roleUpdate,
+                    phone: phoneUpdate
                 )
                 dismiss()
             } catch {
@@ -187,5 +210,10 @@ struct EditUserSheet: View {
                 isSaving = false
             }
         }
+    }
+
+    private func normalizePhone(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

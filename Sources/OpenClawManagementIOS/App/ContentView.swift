@@ -5,7 +5,21 @@ enum MainTab: String, CaseIterable, Identifiable {
     case agents = "Agents"
     case sessions = "Sessions"
     case chat = "Chat"
+    case calls = "Voice"
+    case tasks = "Tasks"
+    case agentActivity = "Agent Activity"
+    case skills = "Skills"
+    case tools = "Tools"
+    case nodes = "Nodes"
+    case devices = "Devices"
     case users = "Users"
+    case permissions = "Permissions"
+    case workflows = "Workflows"
+    case cron = "Cron"
+    case config = "Config"
+    case knowledge = "Knowledge"
+    case monitoring = "Monitoring"
+    case logs = "Logs"
     case settings = "Settings"
     
     var id: String { self.rawValue }
@@ -16,7 +30,21 @@ enum MainTab: String, CaseIterable, Identifiable {
         case .agents: return "cpu"
         case .sessions: return "waveform.path.ecg"
         case .chat: return "bubble.left.and.bubble.right"
+        case .calls: return "phone.arrow.up.right"
+        case .tasks: return "checklist"
+        case .agentActivity: return "chart.bar.xaxis"
+        case .skills: return "puzzlepiece.extension"
+        case .tools: return "wrench.and.screwdriver"
+        case .nodes: return "point.3.connected.trianglepath.dotted"
+        case .devices: return "iphone"
         case .users: return "person.2.fill"
+        case .permissions: return "lock.shield"
+        case .workflows: return "arrow.triangle.branch"
+        case .cron: return "clock.arrow.2.circlepath"
+        case .config: return "doc.badge.gearshape"
+        case .knowledge: return "brain"
+        case .monitoring: return "waveform.path.ecg"
+        case .logs: return "doc.text"
         case .settings: return "network"
         }
     }
@@ -24,11 +52,26 @@ enum MainTab: String, CaseIterable, Identifiable {
     static func allowed(for role: AppUserRole) -> [MainTab] {
         switch role {
         case .admin:
-            [.dashboard, .agents, .sessions, .chat, .users, .settings]
+            [
+                .dashboard, .agents, .sessions, .chat, .calls,
+                .tasks, .agentActivity,
+                .skills, .tools, .nodes, .devices, .users, .permissions,
+                .workflows, .cron, .config,
+                .knowledge,
+                .monitoring, .logs,
+                .settings
+            ]
         case .operator:
-            [.dashboard, .agents, .sessions, .chat]
+            [
+                .dashboard, .agents, .sessions, .chat, .calls,
+                .tasks, .agentActivity,
+                .skills, .tools, .nodes, .devices,
+                .workflows, .cron,
+                .knowledge,
+                .monitoring, .logs
+            ]
         case .basic:
-            [.dashboard, .agents, .sessions]
+            [.dashboard, .agents, .sessions, .tasks, .knowledge]
         }
     }
 }
@@ -113,7 +156,21 @@ struct ContentView: View {
                 case .agents: AgentsView()
                 case .sessions: SessionsView()
                 case .chat: ChatContainerView()
+                case .calls: CallsView()
+                case .tasks: TasksView()
+                case .agentActivity: AgentActivityView()
+                case .skills: SkillsView()
+                case .tools: ToolsView()
+                case .nodes: NodesView()
+                case .devices: DevicesView()
                 case .users: UsersView()
+                case .permissions: PermissionsView()
+                case .workflows: WorkflowsView()
+                case .cron: CronView()
+                case .config: ConfigView()
+                case .knowledge: KnowledgeView()
+                case .monitoring: MonitoringView()
+                case .logs: LogsView()
                 case .settings: ConnectionSettingsView()
                 }
             }

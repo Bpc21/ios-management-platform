@@ -153,7 +153,16 @@ final class AuthService {
         }
 
         let payload = try await requestObject(method: "users.update", body: body)
-        let updated = try Self.parseUser(from: payload)
+        let updated: AppUser
+        if let parsed = (try? Self.parseUserIfPresent(in: payload)) ?? nil {
+            updated = parsed
+        } else {
+            let users = try await allUsers()
+            guard let refreshed = users.first(where: { $0.id == user.id }) else {
+                throw AuthError.invalidResponse("users.update succeeded but no updated user payload was returned")
+            }
+            updated = refreshed
+        }
         if updated.id == currentUser?.id {
             currentUser = updated
             cacheUser(updated)
@@ -329,6 +338,17 @@ final class AuthService {
             lastLoginAt: lastLoginAt,
             agentAssignments: agentAssignments,
             permissions: permissions)
+    }
+
+    private static func parseUserIfPresent(in root: [String: Any]) throws -> AppUser? {
+        if root["user"] != nil {
+            return try parseUser(from: root)
+        }
+        let likelyFields = ["id", "_id", "username", "displayName", "name", "role", "phone"]
+        if likelyFields.contains(where: { root[$0] != nil }) {
+            return try parseUser(from: root)
+        }
+        return nil
     }
 
     private static func asString(_ value: Any?) -> String? {
