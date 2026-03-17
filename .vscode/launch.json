@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:ios-management-platform}",
+            "name": "Debug OpenClawManagementIOS",
+            "program": "${workspaceFolder:ios-management-platform}/.build/debug/OpenClawManagementIOS",
+            "preLaunchTask": "swift: Build Debug OpenClawManagementIOS"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:ios-management-platform}",
+            "name": "Release OpenClawManagementIOS",
+            "program": "${workspaceFolder:ios-management-platform}/.build/release/OpenClawManagementIOS",
+            "preLaunchTask": "swift: Build Release OpenClawManagementIOS"
+        }
+    ]
+}
