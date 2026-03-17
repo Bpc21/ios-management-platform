@@ -189,10 +189,11 @@ struct EditUserSheet: View {
                 if normalizedPhone == normalizedOriginalPhone {
                     phoneUpdate = nil
                 } else {
-                    phoneUpdate = phone
+                    phoneUpdate = normalizedPhone ?? ""
                 }
 
                 if displayNameUpdate == nil, passwordUpdate == nil, roleUpdate == nil, phoneUpdate == nil {
+                    isSaving = false
                     dismiss()
                     return
                 }

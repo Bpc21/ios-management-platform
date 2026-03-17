@@ -1,4 +1,5 @@
 import XCTest
+import OpenClawProtocol
 @testable import OpenClawManagementIOS
 
 @MainActor
@@ -281,6 +282,115 @@ final class AppCoreTests: XCTestCase {
         XCTAssertEqual(second.workflows.first?.name, "Incident triage")
         XCTAssertEqual(second.knowledgeEntries.count, 1)
         XCTAssertEqual(second.knowledgeEntries.first?.title, "Runbook")
+    }
+
+    func testAuthUpdateUserRetriesWithBaselineFieldsWhenAckRefreshIsStale() async throws {
+        let settings = makeSettings()
+        let secureStore = InMemorySecureStringStore()
+        let targetPhone = "+15550001111"
+        var updateRequests = 0
+        var listRequests = 0
+
+        let auth = AuthService(
+            gateway: GatewayService(),
+            settings: settings,
+            secureStore: secureStore,
+            requestHandler: { method, body in
+                switch method {
+                case "auth.login":
+                    return [
+                        "token": "session-token",
+                        "user": Self.makeUserPayload(
+                            id: "u_1",
+                            username: "alice",
+                            role: "admin",
+                            phone: nil,
+                            agentAssignments: ["dev-director"])
+                    ]
+                case "users.update":
+                    updateRequests += 1
+                    if updateRequests == 1 {
+                        XCTAssertEqual(body["phone"] as? String, targetPhone)
+                        XCTAssertEqual(body["displayName"] as? String, nil)
+                        XCTAssertEqual(body["role"] as? String, nil)
+                        return ["ok": true]
+                    } else {
+                        XCTAssertEqual(body["phone"] as? String, targetPhone)
+                        XCTAssertEqual(body["displayName"] as? String, "Alice")
+                        XCTAssertEqual(body["role"] as? String, "admin")
+                        return ["ok": true]
+                    }
+                case "users.list":
+                    listRequests += 1
+                    let returnedPhone = listRequests == 1 ? nil : targetPhone
+                    return [
+                        "users": [
+                            Self.makeUserPayload(
+                                id: "u_1",
+                                username: "alice",
+                                role: "admin",
+                                phone: returnedPhone,
+                                agentAssignments: ["dev-director"])
+                        ]
+                    ]
+                default:
+                    XCTFail("Unexpected method \(method)")
+                    return [:]
+                }
+            })
+
+        let loginSucceeded = await auth.login(username: "alice", password: "secret")
+        XCTAssertTrue(loginSucceeded)
+
+        let updated = try await auth.updateUser(auth.currentUser!, phone: targetPhone)
+        XCTAssertEqual(updateRequests, 2)
+        XCTAssertEqual(updated.phone, targetPhone)
+    }
+
+    func testChatAgentAccessFiltersByRole() {
+        let allAgents: [AgentSummary] = [
+            AgentSummary(id: "alpha", name: "Alpha", identity: nil),
+            AgentSummary(id: "dev-director", name: "Director", identity: nil),
+            AgentSummary(id: "beta", name: "Beta", identity: nil),
+        ]
+
+        let admin = AppUser(
+            id: "1",
+            username: "admin",
+            displayName: "Admin",
+            role: .admin,
+            agentAssignments: ["alpha"])
+        let op = AppUser(
+            id: "2",
+            username: "operator",
+            displayName: "Operator",
+            role: .operator,
+            agentAssignments: ["alpha"])
+        let basic = AppUser(
+            id: "3",
+            username: "basic",
+            displayName: "Basic",
+            role: .basic,
+            agentAssignments: ["alpha"])
+
+        XCTAssertEqual(ChatAgentAccess.visibleAgents(allAgents, for: admin).map(\.id), ["alpha", "dev-director", "beta"])
+        XCTAssertEqual(ChatAgentAccess.visibleAgents(allAgents, for: op).map(\.id), ["alpha", "dev-director"])
+        XCTAssertEqual(ChatAgentAccess.visibleAgents(allAgents, for: basic).map(\.id), ["alpha"])
+    }
+
+    func testOperatorChatTransportIncludesSelectedAgentInParams() {
+        let payload = OperatorChatTransport.makeSendParams(
+            sessionKey: "agent:alpha:main",
+            message: "hello",
+            thinking: "medium",
+            agentId: "alpha",
+            attachments: nil,
+            timeoutMs: 30000,
+            idempotencyKey: "run_1")
+
+        XCTAssertEqual(payload.sessionKey, "agent:alpha:main")
+        XCTAssertEqual(payload.agentId, "alpha")
+        XCTAssertEqual(payload.message, "hello")
     }
 }
 

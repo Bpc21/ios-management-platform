@@ -29,6 +29,9 @@ let package = Package(
                 .product(name: "OpenClawProtocol", package: "OpenClawKit"),
                 .product(name: "OpenClawChatUI", package: "OpenClawKit")
             ],
+            exclude: [
+                "Theme/broderlabs.icon",
+            ],
             swiftSettings: [
                 .enableUpcomingFeature("StrictConcurrency")
             ]

@@ -131,6 +131,10 @@ final class AuthService {
         role: AppUserRole? = nil,
         phone: String? = nil
     ) async throws -> AppUser {
+        let intendedDisplayName = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let intendedRole = role
+        let intendedPhone = phone.map { normalizePhone($0) ?? "" }
+
         var body: [String: Any] = ["id": user.id]
         if let displayName {
             body["displayName"] = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -157,11 +161,43 @@ final class AuthService {
         if let parsed = (try? Self.parseUserIfPresent(in: payload)) ?? nil {
             updated = parsed
         } else {
-            let users = try await allUsers()
-            guard let refreshed = users.first(where: { $0.id == user.id }) else {
+            guard let refreshed = try await fetchUser(id: user.id) else {
                 throw AuthError.invalidResponse("users.update succeeded but no updated user payload was returned")
             }
-            updated = refreshed
+            if !matchesExpectedUpdate(
+                refreshed,
+                expectedDisplayName: intendedDisplayName,
+                expectedRole: intendedRole,
+                expectedPhone: intendedPhone)
+            {
+                let fallbackPayload = try await requestObject(
+                    method: "users.update",
+                    body: makeFallbackUpdateBody(
+                        user: user,
+                        displayName: intendedDisplayName,
+                        password: password,
+                        role: intendedRole,
+                        phone: intendedPhone))
+
+                if let parsedUser = try? Self.parseUserIfPresent(in: fallbackPayload) {
+                    updated = parsedUser
+                } else {
+                    guard let fallbackRefreshed = try await fetchUser(id: user.id) else {
+                        throw AuthError.invalidResponse("users.update fallback did not return updated user")
+                    }
+                    guard matchesExpectedUpdate(
+                        fallbackRefreshed,
+                        expectedDisplayName: intendedDisplayName,
+                        expectedRole: intendedRole,
+                        expectedPhone: intendedPhone)
+                    else {
+                        throw AuthError.invalidResponse("users.update fallback did not persist requested fields")
+                    }
+                    updated = fallbackRefreshed
+                }
+            } else {
+                updated = refreshed
+            }
         }
         if updated.id == currentUser?.id {
             currentUser = updated
@@ -281,6 +317,62 @@ final class AuthService {
         guard let value else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func fetchUser(id: String) async throws -> AppUser? {
+        let users = try await allUsers()
+        return users.first(where: { $0.id == id })
+    }
+
+    private func matchesExpectedUpdate(
+        _ user: AppUser,
+        expectedDisplayName: String?,
+        expectedRole: AppUserRole?,
+        expectedPhone: String?
+    ) -> Bool {
+        if let expectedDisplayName {
+            let current = user.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if current != expectedDisplayName {
+                return false
+            }
+        }
+        if let expectedRole, user.role != expectedRole {
+            return false
+        }
+        if let expectedPhone {
+            let current = normalizePhone(user.phone) ?? ""
+            if current != expectedPhone {
+                return false
+            }
+        }
+        return true
+    }
+
+    private func makeFallbackUpdateBody(
+        user: AppUser,
+        displayName: String?,
+        password: String?,
+        role: AppUserRole?,
+        phone: String?
+    ) -> [String: Any] {
+        var body: [String: Any] = [
+            "id": user.id,
+            "displayName": (displayName ?? user.displayName).trimmingCharacters(in: .whitespacesAndNewlines),
+            "role": (role ?? user.role).rawValue,
+        ]
+
+        if let password {
+            let trimmed = password.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                body["password"] = trimmed
+            }
+        }
+
+        if let phone {
+            body["phone"] = phone.isEmpty ? NSNull() : phone
+        }
+
+        return body
     }
 
     private static func encodeJSON(_ object: [String: Any]) throws -> String {

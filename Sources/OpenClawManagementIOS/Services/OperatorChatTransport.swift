@@ -4,12 +4,40 @@ import OpenClawProtocol
 import Foundation
 import OSLog
 
+actor SelectedChatAgentContext {
+    private var agentId: String?
+
+    init(agentId: String? = nil) {
+        self.agentId = agentId
+    }
+
+    func setAgentId(_ agentId: String?) {
+        self.agentId = agentId
+    }
+
+    func currentAgentId() -> String? {
+        agentId
+    }
+}
+
 struct OperatorChatTransport: OpenClawChatTransport, Sendable {
     private static let logger = Logger(subsystem: "ai.openclaw.management", category: "chat.transport")
     private let gateway: GatewayNodeSession
+    private let selectedAgentContext: SelectedChatAgentContext?
 
-    init(gateway: GatewayNodeSession) {
+    struct ChatSendParams: Codable, Equatable {
+        var sessionKey: String
+        var message: String
+        var thinking: String
+        var attachments: [OpenClawChatAttachmentPayload]?
+        var timeoutMs: Int
+        var idempotencyKey: String
+        var agentId: String?
+    }
+
+    init(gateway: GatewayNodeSession, selectedAgentContext: SelectedChatAgentContext? = nil) {
         self.gateway = gateway
+        self.selectedAgentContext = selectedAgentContext
     }
 
     func abortRun(sessionKey: String, runId: String) async throws {
@@ -54,18 +82,12 @@ struct OperatorChatTransport: OpenClawChatTransport, Sendable {
         attachments: [OpenClawChatAttachmentPayload]) async throws -> OpenClawChatSendResponse
     {
         Self.logger.info("chat.send sessionKey=\(sessionKey, privacy: .public) len=\(message.count)")
-        struct Params: Codable {
-            var sessionKey: String
-            var message: String
-            var thinking: String
-            var attachments: [OpenClawChatAttachmentPayload]?
-            var timeoutMs: Int
-            var idempotencyKey: String
-        }
-        let params = Params(
+        let selectedAgent = await selectedAgentContext?.currentAgentId()
+        let params = Self.makeSendParams(
             sessionKey: sessionKey,
             message: message,
             thinking: thinking,
+            agentId: selectedAgent,
             attachments: attachments.isEmpty ? nil : attachments,
             timeoutMs: 30000,
             idempotencyKey: idempotencyKey)
@@ -73,6 +95,27 @@ struct OperatorChatTransport: OpenClawChatTransport, Sendable {
         let json = String(data: data, encoding: .utf8)
         let res = try await self.gateway.request(method: "chat.send", paramsJSON: json, timeoutSeconds: 35)
         return try JSONDecoder().decode(OpenClawChatSendResponse.self, from: res)
+    }
+
+    static func makeSendParams(
+        sessionKey: String,
+        message: String,
+        thinking: String,
+        agentId: String?,
+        attachments: [OpenClawChatAttachmentPayload]?,
+        timeoutMs: Int,
+        idempotencyKey: String
+    ) -> ChatSendParams {
+        ChatSendParams(
+            sessionKey: sessionKey,
+            message: message,
+            thinking: thinking,
+            attachments: attachments,
+            timeoutMs: timeoutMs,
+            idempotencyKey: idempotencyKey,
+            agentId: agentId?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                ? agentId?.trimmingCharacters(in: .whitespacesAndNewlines)
+                : nil)
     }
 
     func requestHealth(timeoutMs: Int) async throws -> Bool {

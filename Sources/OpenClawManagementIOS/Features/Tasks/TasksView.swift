@@ -54,8 +54,8 @@ struct TasksView: View {
                         selectedStatus = status
                     } label: {
                         Text(status.label)
-                            .font(OC.Typography.caption)
-                            .foregroundStyle(selectedStatus == status ? OC.Colors.background : OC.Colors.textSecondary)
+                            .font(selectedStatus == status ? OC.Typography.bodyMedium : OC.Typography.caption)
+                            .foregroundStyle(selectedStatus == status ? Color.white : OC.Colors.textSecondary)
                             .padding(.horizontal, OC.Spacing.md)
                             .padding(.vertical, OC.Spacing.xs)
                             .background(selectedStatus == status ? OC.Colors.accent : OC.Colors.surfaceElevated)
