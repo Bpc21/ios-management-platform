@@ -6,23 +6,38 @@ extension AgentSummary: @retroactive Identifiable {}
 
 struct AgentsView: View {
     @Environment(GatewayService.self) private var gateway
+    @Environment(AuthService.self) private var auth
     @State private var selectedAgent: AgentSummary?
     
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: OC.Spacing.md) {
-                    if gateway.agents.isEmpty {
+                    HStack {
+                        Text("\(visibleAgents.count) agent(s)")
+                            .font(OC.Typography.caption)
+                            .foregroundStyle(OC.Colors.textTertiary)
+                        Spacer()
+                        Button {
+                            Task { await gateway.refreshAgents() }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .foregroundStyle(OC.Colors.textSecondary)
+                        }
+                    }
+                    .padding(.horizontal, OC.Spacing.md)
+
+                    if visibleAgents.isEmpty {
                         Text("No agents found.")
                             .font(OC.Typography.bodyMedium)
                             .foregroundStyle(OC.Colors.textTertiary)
                             .padding(.top, OC.Spacing.xxl)
                     } else {
-                        ForEach(gateway.agents) { agent in
+                        ForEach(visibleAgents) { agent in
                             Button {
                                 selectedAgent = agent
                             } label: {
-                                AgentRow(agent: agent)
+                                AgentRow(agent: agent, isDefault: agent.id == gateway.defaultAgentId)
                             }
                             .buttonStyle(.plain)
                         }
@@ -32,15 +47,24 @@ struct AgentsView: View {
             }
             .navigationTitle("Agents")
             .ocNavigationBarHidden(true)
+            .task(id: gateway.connectionState.isConnected) {
+                guard gateway.connectionState.isConnected else { return }
+                await gateway.refreshAgents()
+            }
             .sheet(item: $selectedAgent) { agent in
                 AgentDetailView(agent: agent)
             }
         }
     }
+
+    private var visibleAgents: [AgentSummary] {
+        AgentVisibilityFilter.filterAgents(gateway.agents, for: auth.currentUser)
+    }
 }
 
 struct AgentRow: View {
     let agent: AgentSummary
+    let isDefault: Bool
     
     var body: some View {
         HStack(spacing: OC.Spacing.md) {
@@ -57,6 +81,15 @@ struct AgentRow: View {
                     .font(OC.Typography.monoSmall)
                     .foregroundStyle(OC.Colors.textTertiary)
                     .lineLimit(1)
+
+                if isDefault {
+                    Text("DEFAULT")
+                        .font(OC.Typography.caption)
+                        .foregroundStyle(OC.Colors.accent)
+                        .padding(.horizontal, OC.Spacing.xs)
+                        .background(OC.Colors.accent.opacity(0.1))
+                        .clipShape(Capsule())
+                }
             }
             
             Spacer()
@@ -84,8 +117,7 @@ struct AgentDetailView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: OC.Spacing.md) {
-                    // Agent Metrics
+            VStack(spacing: OC.Spacing.md) {
                     VStack(alignment: .leading, spacing: OC.Spacing.sm) {
                         Text("METADATA")
                             .font(OC.Typography.caption)
@@ -97,16 +129,15 @@ struct AgentDetailView: View {
                     }
                     .ocCard()
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                    // Task Log Placeholder
+
                     VStack(alignment: .leading, spacing: OC.Spacing.sm) {
-                        Text("LATEST TASKS")
+                        Text("IDENTITY")
                             .font(OC.Typography.caption)
                             .foregroundStyle(OC.Colors.textTertiary)
-                        
-                        Text("Task history synchronization not yet implemented for iOS.")
-                            .font(OC.Typography.monoSmall)
-                            .foregroundStyle(OC.Colors.textTertiary)
+
+                        identityRow("ID", value: agent.id)
+                        identityRow("Name", value: agent.name ?? "—")
+                        identityRow("Persona", value: agent.identity?["persona"]?.value as? String ?? "—")
                     }
                     .ocCard()
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -124,6 +155,20 @@ struct AgentDetailView: View {
                     .foregroundStyle(OC.Colors.accent)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func identityRow(_ key: String, value: String) -> some View {
+        HStack {
+            Text(key)
+                .font(OC.Typography.caption)
+                .foregroundStyle(OC.Colors.textTertiary)
+            Spacer()
+            Text(value)
+                .font(OC.Typography.monoSmall)
+                .foregroundStyle(OC.Colors.textPrimary)
+                .lineLimit(1)
         }
     }
 }

@@ -34,7 +34,8 @@ final class GatewayService {
     private(set) var connectionState: ConnectionState = .disconnected
     private(set) var snapshot: Snapshot?
     private(set) var presence: [PresenceEntry] = []
-    var agents: [AgentSummary] = []
+    private(set) var agents: [AgentSummary] = []
+    private(set) var defaultAgentId: String = ""
     private(set) var recentEvents: [EventFrame] = []
     private(set) var serverName: String?
     private(set) var remoteAddress: String?
@@ -59,6 +60,7 @@ final class GatewayService {
         }
 
         let token = settings.loadToken()
+        self.remoteAddress = url.host ?? url.absoluteString
         self.connectionState = .connecting
 
         let options = GatewayConnectOptions(
@@ -122,6 +124,8 @@ final class GatewayService {
         self.connectionState = .disconnected
         self.snapshot = nil
         self.presence = []
+        self.agents = []
+        self.defaultAgentId = ""
         self.recentEvents = []
         self.serverName = nil
         self.remoteAddress = nil
@@ -142,6 +146,22 @@ final class GatewayService {
 
     func requestRaw(method: String, paramsJSON: String? = nil, timeout: Int = 15) async throws -> Data {
         try await self.session.request(method: method, paramsJSON: paramsJSON, timeoutSeconds: timeout)
+    }
+
+    func refreshAgents() async {
+        guard connectionState.isConnected else {
+            self.agents = []
+            self.defaultAgentId = ""
+            return
+        }
+        do {
+            let data = try await self.session.request(method: "agents.list", paramsJSON: "{}", timeoutSeconds: 15)
+            let res = try JSONDecoder().decode(AgentsListResult.self, from: data)
+            self.agents = res.agents
+            self.defaultAgentId = res.defaultid
+        } catch {
+            Self.logger.error("Failed to fetch agents: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     // MARK: - Event Subscription
@@ -168,19 +188,7 @@ final class GatewayService {
         self.retryDelay = 1.0
         Self.logger.info("Connected to gateway")
         self.startEventMonitoring()
-        
-        // Fetch agents list
-        Task {
-            do {
-                let data = try await self.session.request(method: "agents.list", paramsJSON: "{}", timeoutSeconds: 15)
-                let res = try JSONDecoder().decode(AgentsListResult.self, from: data)
-                await MainActor.run {
-                    self.agents = res.agents
-                }
-            } catch {
-                Self.logger.error("Failed to fetch agents: \(error.localizedDescription)")
-            }
-        }
+        Task { await self.refreshAgents() }
     }
 
     private func handleDisconnected(_ reason: String) {
@@ -243,8 +251,24 @@ final class GatewayService {
                 self.presence = entries
             }
         case "health":
-            // Health frames are high-frequency keepalive noise; no app state changes here.
-            break
+            if let payload = event.payload,
+               let data = try? JSONEncoder().encode(payload),
+               let object = try? GatewayJSON.object(from: data)
+            {
+                if let uptime = object["uptimeMs"] as? Int {
+                    self.uptimeMs = uptime
+                } else if let uptime = object["uptimeMs"] as? NSNumber {
+                    self.uptimeMs = uptime.intValue
+                }
+                if let name = object["serverName"] as? String {
+                    self.serverName = name
+                } else if let name = object["name"] as? String {
+                    self.serverName = name
+                }
+                if let remote = object["remoteAddress"] as? String {
+                    self.remoteAddress = remote
+                }
+            }
         default:
             self.recentEvents.append(event)
             if self.recentEvents.count > 1000 {

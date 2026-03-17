@@ -5,16 +5,7 @@ enum MainTab: String, CaseIterable, Identifiable {
     case agents = "Agents"
     case sessions = "Sessions"
     case chat = "Chat"
-    case voice = "Voice"
-    case monitoring = "Monitoring"
-    case logs = "Logs"
-    case cron = "Cron"
-    case nodes = "Nodes"
-    case devices = "Devices"
     case users = "Users"
-    case permissions = "Permissions"
-    case skills = "Skills"
-    case tools = "Tools"
     case settings = "Settings"
     
     var id: String { self.rawValue }
@@ -25,17 +16,19 @@ enum MainTab: String, CaseIterable, Identifiable {
         case .agents: return "cpu"
         case .sessions: return "waveform.path.ecg"
         case .chat: return "bubble.left.and.bubble.right"
-        case .voice: return "mic.fill"
-        case .monitoring: return "chart.line.uptrend.xyaxis"
-        case .logs: return "doc.text.magnifyingglass"
-        case .cron: return "timer"
-        case .nodes: return "server.rack"
-        case .devices: return "display"
         case .users: return "person.2.fill"
-        case .permissions: return "key.fill"
-        case .skills: return "brain.head.profile"
-        case .tools: return "hammer.fill"
         case .settings: return "network"
+        }
+    }
+
+    static func allowed(for role: AppUserRole) -> [MainTab] {
+        switch role {
+        case .admin:
+            [.dashboard, .agents, .sessions, .chat, .users, .settings]
+        case .operator:
+            [.dashboard, .agents, .sessions, .chat]
+        case .basic:
+            [.dashboard, .agents, .sessions]
         }
     }
 }
@@ -44,15 +37,21 @@ struct ContentView: View {
     @State private var selectedTab: MainTab = .dashboard
     @Environment(GatewayService.self) private var gateway
     @Environment(AuthService.self) private var auth
-    @Environment(SettingsStore.self) private var settings
     
     var body: some View {
         VStack(spacing: 0) {
             // Header Bar
             HStack {
-                Text("Gateway Manager")
-                    .font(OC.Typography.h2)
-                    .foregroundStyle(OC.Colors.textPrimary)
+                VStack(alignment: .leading, spacing: OC.Spacing.xs) {
+                    Text("Gateway Manager")
+                        .font(OC.Typography.h2)
+                        .foregroundStyle(OC.Colors.textPrimary)
+                    if let user = auth.currentUser {
+                        Text("\(user.displayName) · \(user.role.label)")
+                            .font(OC.Typography.caption)
+                            .foregroundStyle(OC.Colors.textTertiary)
+                    }
+                }
                 
                 Spacer()
                 
@@ -61,6 +60,12 @@ struct ContentView: View {
                     .fill(gatewayStatusColor)
                     .frame(width: 8, height: 8)
                     .shadow(color: gatewayStatusColor.opacity(0.3), radius: 4)
+
+                Button("Sign Out") {
+                    auth.logout()
+                }
+                .font(OC.Typography.caption)
+                .foregroundStyle(OC.Colors.textTertiary)
             }
             .padding(.horizontal, OC.Spacing.lg)
             .padding(.top, OC.Spacing.md)
@@ -70,7 +75,7 @@ struct ContentView: View {
             // Segmented Navigation Header (Horizontal Ribbon)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: OC.Spacing.md) {
-                    ForEach(MainTab.allCases) { tab in
+                    ForEach(visibleTabs) { tab in
                         Button(action: {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 selectedTab = tab
@@ -108,19 +113,26 @@ struct ContentView: View {
                 case .agents: AgentsView()
                 case .sessions: SessionsView()
                 case .chat: ChatContainerView()
-                case .voice: CallsView()
-                case .monitoring: MonitoringView()
-                case .logs: LogsView()
-                case .cron: CronView()
-                case .nodes: NodesView()
-                case .devices: DevicesView()
                 case .users: UsersView()
-                case .permissions: PermissionsView()
-                case .skills: SkillsView()
-                case .tools: ToolsView()
                 case .settings: ConnectionSettingsView()
                 }
             }
+        }
+        .onAppear {
+            ensureSelectedTabIsAllowed()
+        }
+        .onChange(of: auth.currentUser?.role) {
+            ensureSelectedTabIsAllowed()
+        }
+    }
+
+    private var visibleTabs: [MainTab] {
+        MainTab.allowed(for: auth.currentUser?.role ?? .basic)
+    }
+
+    private func ensureSelectedTabIsAllowed() {
+        if !visibleTabs.contains(selectedTab), let first = visibleTabs.first {
+            selectedTab = first
         }
     }
     

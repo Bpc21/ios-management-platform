@@ -4,129 +4,241 @@ import OpenClawKit
 struct ConnectionSettingsView: View {
     @Environment(SettingsStore.self) private var settings
     @Environment(GatewayService.self) private var gateway
-    
-    @State private var urlString: String = ""
-    @State private var tokenString: String = ""
+
+    @State private var host = ""
+    @State private var port = ""
+    @State private var useTLS = true
+    @State private var token = ""
+    @State private var autoConnect = false
+    @State private var connectionMode: ConnectionMode = .local
+    @State private var remoteTransport: RemoteTransport = .direct
+    @State private var remoteURL = ""
+    @State private var remoteSSHTarget = ""
+
     @State private var isConnecting = false
-    
+
     var body: some View {
         ScrollView {
-            VStack(spacing: OC.Spacing.xl) {
-                
-                // Status Header
-                VStack(spacing: OC.Spacing.sm) {
-                    Image(systemName: gateway.connectionState.isConnected ? "link.cloud.fill" : "exclamationmark.triangle.fill")
-                        .font(.system(size: 40))
-                        .foregroundStyle(gateway.connectionState.isConnected ? OC.Colors.success : OC.Colors.warning)
-                    
-                    Text(gateway.connectionState.isConnected ? "Connected to Gateway" : "Disconnected")
-                        .font(OC.Typography.h2)
-                        .foregroundStyle(OC.Colors.textPrimary)
-                    
-                    if gateway.connectionState.isConnected {
-                        Text(settings.gatewayURL?.absoluteString ?? "")
-                            .font(OC.Typography.mono)
-                            .foregroundStyle(OC.Colors.textTertiary)
-                    }
+            VStack(alignment: .leading, spacing: OC.Spacing.xl) {
+                statusHeader
+                connectionCard
+                if case .error(let message) = gateway.connectionState {
+                    Text(message)
+                        .font(OC.Typography.caption)
+                        .foregroundStyle(OC.Colors.destructive)
+                        .padding(.horizontal, OC.Spacing.md)
                 }
-                .padding(.top, OC.Spacing.xl)
-                
-                // Configuration Card
-                VStack(alignment: .leading, spacing: OC.Spacing.md) {
-                    Text("Gateway Configuration")
-                        .font(OC.Typography.h3)
-                        .foregroundStyle(OC.Colors.textSecondary)
-                    
-                    VStack(alignment: .leading, spacing: OC.Spacing.xs) {
-                        Text("SERVER URL")
-                            .font(OC.Typography.caption)
-                            .foregroundStyle(OC.Colors.textTertiary)
-                        
-                        TextField("wss://gateway.local:8080", text: $urlString)
-                            .font(OC.Typography.mono)
-                            .textFieldStyle(.plain)
-                            .padding(OC.Spacing.sm)
-                            .background(Color.black.opacity(0.2))
-                            .cornerRadius(OC.Radius.sm)
-                            .overlay(RoundedRectangle(cornerRadius: OC.Radius.sm).stroke(OC.Colors.border))
-                            .autocorrectionDisabled()
-                    }
-                    
-                    VStack(alignment: .leading, spacing: OC.Spacing.xs) {
-                        Text("ACCESS TOKEN")
-                            .font(OC.Typography.caption)
-                            .foregroundStyle(OC.Colors.textTertiary)
-                        
-                        SecureField("eyJhbGciOiJIUzI1NiIs...", text: $tokenString)
-                            .font(OC.Typography.mono)
-                            .textFieldStyle(.plain)
-                            .padding(OC.Spacing.sm)
-                            .background(Color.black.opacity(0.2))
-                            .cornerRadius(OC.Radius.sm)
-                            .overlay(RoundedRectangle(cornerRadius: OC.Radius.sm).stroke(OC.Colors.border))
-                            .textContentType(.password)
-                    }
-                    
-                    Button(action: saveAndConnect) {
-                        HStack {
-                            Spacer()
-                            if isConnecting {
-                                ProgressView()
-                                    .tint(.white)
-                            } else {
-                                Text(gateway.connectionState.isConnected ? "Update & Reconnect" : "Connect")
-                                    .font(OC.Typography.bodyMedium)
-                            }
-                            Spacer()
-                        }
-                        .padding(OC.Spacing.md)
-                        .background(OC.Colors.accent)
-                        .foregroundStyle(.white)
-                        .cornerRadius(OC.Radius.sm)
-                    }
-                    .disabled(urlString.isEmpty)
-                    .padding(.top, OC.Spacing.sm)
-                    
-                    if gateway.connectionState.isConnected {
-                        Button(action: disconnect) {
-                            HStack {
-                                Spacer()
-                                Text("Disconnect")
-                                    .font(OC.Typography.bodyMedium)
-                                Spacer()
-                            }
-                            .padding(OC.Spacing.md)
-                            .background(OC.Colors.surfaceElevated)
-                            .foregroundStyle(OC.Colors.destructive)
-                            .cornerRadius(OC.Radius.sm)
-                            .overlay(RoundedRectangle(cornerRadius: OC.Radius.sm).stroke(OC.Colors.destructive, lineWidth: 1))
-                        }
-                    }
-                }
-                .ocCard()
-                .padding(.horizontal, OC.Spacing.md)
-                
+            }
+            .padding(.vertical, OC.Spacing.lg)
+        }
+        .onAppear(perform: loadFromSettings)
+    }
+
+    private var statusHeader: some View {
+        VStack(spacing: OC.Spacing.sm) {
+            Image(systemName: gateway.connectionState.isConnected ? "link.badge.plus" : "exclamationmark.triangle.fill")
+                .font(.system(size: 36))
+                .foregroundStyle(gateway.connectionState.isConnected ? OC.Colors.success : OC.Colors.warning)
+
+            Text(gateway.connectionState.isConnected ? "Connected" : gateway.connectionState.label)
+                .font(OC.Typography.h2)
+                .foregroundStyle(OC.Colors.textPrimary)
+
+            if let gatewayURL = settings.gatewayURL?.absoluteString {
+                Text(gatewayURL)
+                    .font(OC.Typography.monoSmall)
+                    .foregroundStyle(OC.Colors.textTertiary)
             }
         }
-        .onAppear {
-            urlString = settings.gatewayHost
-            tokenString = settings.loadToken() ?? ""
+        .frame(maxWidth: .infinity)
+    }
+
+    private var connectionCard: some View {
+        VStack(alignment: .leading, spacing: OC.Spacing.md) {
+            Text("Connection")
+                .font(OC.Typography.h3)
+                .foregroundStyle(OC.Colors.textPrimary)
+
+            Picker("Mode", selection: $connectionMode) {
+                Text("Local").tag(ConnectionMode.local)
+                Text("Remote").tag(ConnectionMode.remote)
+            }
+            .pickerStyle(.segmented)
+
+            if connectionMode == .remote {
+                Picker("Transport", selection: $remoteTransport) {
+                    Text("Direct").tag(RemoteTransport.direct)
+                    Text("SSH Tunnel").tag(RemoteTransport.sshTunnel)
+                }
+                .pickerStyle(.segmented)
+
+                field("Gateway URL", text: $remoteURL, placeholder: "wss://gateway.tail.ts.net")
+
+                if remoteTransport == .sshTunnel {
+                    field("SSH Target", text: $remoteSSHTarget, placeholder: "user@gateway.tail.ts.net")
+                }
+            } else {
+                field("Host", text: $host, placeholder: "192.168.1.100")
+
+                HStack(spacing: OC.Spacing.md) {
+                    field("Port", text: $port, placeholder: "443")
+                        .frame(width: 130)
+
+                    Toggle(isOn: $useTLS) {
+                        Text("Use TLS")
+                            .font(OC.Typography.body)
+                            .foregroundStyle(OC.Colors.textSecondary)
+                    }
+                    .toggleStyle(.switch)
+                }
+            }
+
+            secureField("Gateway Token", text: $token, placeholder: "Gateway authentication token")
+
+            Toggle(isOn: $autoConnect) {
+                Text("Auto-connect on launch")
+                    .font(OC.Typography.body)
+                    .foregroundStyle(OC.Colors.textSecondary)
+            }
+            .toggleStyle(.switch)
+
+            if let validationMessage = validationMessage {
+                Text(validationMessage)
+                    .font(OC.Typography.caption)
+                    .foregroundStyle(OC.Colors.warning)
+            }
+
+            HStack(spacing: OC.Spacing.md) {
+                Button("Save") {
+                    saveSettings()
+                }
+                .buttonStyle(.bordered)
+
+                Button(gateway.connectionState.isConnected ? "Update & Reconnect" : "Connect") {
+                    connect()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canConnect || isConnecting)
+
+                if gateway.connectionState.isConnected {
+                    Button("Disconnect") {
+                        Task { await gateway.disconnect() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(OC.Colors.destructive)
+                } else if case .error = gateway.connectionState {
+                    Button("Clear Error") {
+                        gateway.clearError()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+        .ocCard()
+        .padding(.horizontal, OC.Spacing.md)
+    }
+
+    private var canConnect: Bool {
+        validationMessage == nil
+    }
+
+    private var validationMessage: String? {
+        switch connectionMode {
+        case .remote:
+            let normalized = SettingsStore.normalizedRemoteURL(remoteURL)
+            if normalized.isEmpty {
+                return "Invalid gateway URL. Set a remote URL like `wss://your-gateway.example.com`."
+            }
+            if SettingsStore.validWebSocketURL(normalized) == nil {
+                return "Invalid gateway URL. Expected a full websocket URL using `ws://` or `wss://`."
+            }
+            return nil
+        case .local:
+            let normalizedHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+            if normalizedHost.isEmpty {
+                return "Invalid gateway URL. Local mode requires a gateway host."
+            }
+            let portValue = Int(port) ?? settings.gatewayPort
+            let scheme = useTLS ? "wss" : "ws"
+            let raw = "\(scheme)://\(normalizedHost):\(portValue)"
+            if SettingsStore.validWebSocketURL(raw) == nil {
+                return "Invalid local gateway URL derived from host and port."
+            }
+            return nil
         }
     }
-    
-    private func saveAndConnect() {
+
+    private func loadFromSettings() {
+        host = settings.gatewayHost
+        port = "\(settings.gatewayPort)"
+        useTLS = settings.gatewayUseTLS
+        token = settings.loadToken() ?? ""
+        autoConnect = settings.autoConnect
+        connectionMode = settings.connectionMode
+        remoteTransport = settings.remoteTransport
+        remoteURL = settings.remoteURL
+        remoteSSHTarget = settings.remoteSSHTarget
+    }
+
+    private func saveSettings() {
+        settings.connectionMode = connectionMode
+        settings.remoteTransport = remoteTransport
+        settings.remoteURL = remoteURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        settings.remoteSSHTarget = remoteSSHTarget.trimmingCharacters(in: .whitespacesAndNewlines)
+        settings.gatewayHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        settings.gatewayPort = Int(port) ?? settings.gatewayPort
+        settings.gatewayUseTLS = useTLS
+        settings.autoConnect = autoConnect
+        settings.saveToken(token.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private func connect() {
         Task {
             isConnecting = true
-            settings.gatewayHost = urlString
-            settings.saveToken(tokenString)
+            saveSettings()
             await gateway.connect(settings: settings)
             isConnecting = false
         }
     }
-    
-    private func disconnect() {
-        Task {
-            await gateway.disconnect()
+
+    @ViewBuilder
+    private func field(_ label: String, text: Binding<String>, placeholder: String) -> some View {
+        VStack(alignment: .leading, spacing: OC.Spacing.xs) {
+            Text(label.uppercased())
+                .font(OC.Typography.caption)
+                .foregroundStyle(OC.Colors.textTertiary)
+            TextField(placeholder, text: text)
+                .textFieldStyle(.plain)
+                .font(OC.Typography.monoSmall)
+                .padding(OC.Spacing.sm)
+                .background(OC.Colors.surfaceElevated)
+                .clipShape(RoundedRectangle(cornerRadius: OC.Radius.sm))
+                .overlay(
+                    RoundedRectangle(cornerRadius: OC.Radius.sm)
+                        .strokeBorder(OC.Colors.border)
+                )
+                .autocorrectionDisabled()
+                .ocTextInputAutocapitalizationNever()
+        }
+    }
+
+    @ViewBuilder
+    private func secureField(_ label: String, text: Binding<String>, placeholder: String) -> some View {
+        VStack(alignment: .leading, spacing: OC.Spacing.xs) {
+            Text(label.uppercased())
+                .font(OC.Typography.caption)
+                .foregroundStyle(OC.Colors.textTertiary)
+            SecureField(placeholder, text: text)
+                .textFieldStyle(.plain)
+                .font(OC.Typography.monoSmall)
+                .padding(OC.Spacing.sm)
+                .background(OC.Colors.surfaceElevated)
+                .clipShape(RoundedRectangle(cornerRadius: OC.Radius.sm))
+                .overlay(
+                    RoundedRectangle(cornerRadius: OC.Radius.sm)
+                        .strokeBorder(OC.Colors.border)
+                )
+                .textContentType(.password)
         }
     }
 }

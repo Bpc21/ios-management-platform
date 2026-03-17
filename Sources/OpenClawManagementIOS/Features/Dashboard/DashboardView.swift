@@ -32,6 +32,13 @@ struct DashboardView: View {
                     )
                     
                     StatCard(
+                        title: "GATEWAY",
+                        value: gateway.remoteAddress ?? "—",
+                        icon: "server.rack",
+                        color: OC.Colors.textSecondary
+                    )
+
+                    StatCard(
                         title: "UPTIME",
                         value: uptimeString,
                         icon: "clock",
@@ -85,9 +92,15 @@ struct DashboardView: View {
     }
     
     private var uptimeString: String {
-        // Mock fallback formatting; in reality, we check gateway properties
         guard gateway.connectionState.isConnected else { return "--" }
-        return "Connected"
+        guard gateway.uptimeMs > 0 else { return "Connected" }
+        let seconds = gateway.uptimeMs / 1000
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        }
+        return "\(minutes)m"
     }
 }
 

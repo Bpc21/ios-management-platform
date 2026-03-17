@@ -22,7 +22,7 @@ struct OpenClawManagementIOS: App {
                 .environment(settingsStore)
                 .environment(gateway)
                 .environment(authService)
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(settingsStore.isDarkMode ? .dark : .light)
                 .task {
                     if settingsStore.autoConnect, settingsStore.gatewayURL != nil {
                         await gateway.connect(settings: settingsStore)

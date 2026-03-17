@@ -33,5 +33,12 @@ let package = Package(
                 .enableUpcomingFeature("StrictConcurrency")
             ]
         ),
+        .testTarget(
+            name: "OpenClawManagementIOSTests",
+            dependencies: ["OpenClawManagementIOS"],
+            swiftSettings: [
+                .enableUpcomingFeature("StrictConcurrency")
+            ]
+        ),
     ]
 )

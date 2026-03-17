@@ -1,26 +1,60 @@
-# iOS Management Platform Design & Architecture
+# iOS Management Platform
 
-## Overview
-This repository contains the iOS adaptation of the macOS Operator Management Platform. It is a native SwiftUI application designed for iPhone and iPad, connecting to an OpenClaw Gateway as an `operator`-role client.
+## Summary
+This repository is the iOS counterpart of the macOS management platform.  
+The current scope is functional parity for the operational core, not visual parity.
 
-## Aesthetic Direction: "The Executive Dashboard"
-After brainstorming, we have committed to a highly professional, data-dense design aesthetic optimized for efficiency and clarity. 
+Operational core on iOS:
+- Gateway connection to the same backend
+- Gateway-backed login and session restore
+- Dashboard (presence and gateway state)
+- Agents (role-filtered list and detail)
+- Sessions (list, detail, reset, compact, delete)
+- Chat (OpenClaw transport)
+- Users management (for allowed roles)
+- Connection settings (local/remote transport model)
 
-### Core Principles
-1. **Zero "OpenClaw" Branding in UI:** The interface is totally generic (e.g., "Gateway Manager").
-2. **Professional & Data-Dense:** The app targets power users. We use structured cards, tight margins, and segmented controls to maximize vertical screen real estate for logs, agent statuses, and data tables.
-3. **No Neon / No Spatial Features:** Glows, neon colors, and 3D spatial window tricks are banned.
-4. **Clean Light / Dark Modes:** The UI must look spectacular in both pure white (Light Mode) and OLED Black (Dark Mode). Shadows are subtle in Light Mode, replaced by pure un-elevated contrast in Dark Mode.
-5. **Categorized Typography:** We rely strictly on font weights (San Francisco) to establish hierarchy, using SF Mono for raw data (logs, IDs).
+Out of scope for this pass:
+- macOS-only surfaces such as menu bar extras, Miniverse desktop integration, and desktop diagnostics panes
 
-## Core Navigation
-- **Top-Level Segmented Controls / Minimal Strip:** Instead of a bulky tab bar or hamburger menu, the primary navigation between features (Dashboard, Agents, Sessions, Settings) utilizes a clean swipeable top-nav or segmented control strip, allowing the content to span the full height of the device.
+## Architecture Notes
+- App: SwiftUI, Swift Package Manager executable target (`OpenClawManagementIOS`)
+- Shared protocol/UI dependencies: `../shared/OpenClawKit`
+- Auth model: gateway-backed (`auth.login`, `auth.session`, `users.*`)
+- Gateway client identity: currently uses the same accepted gateway client id path as macOS (`openclaw-macos`) for compatibility with existing gateway schema constraints
 
-## Core Features to Port (from macOS MVP)
-- **Local Auth:** Login screen / first-admin onboarding.
-- **Dashboard:** Grid of key gateway stats.
-- **Agents:** List of spawned agents + basic stat view.
-- **Sessions:** List of active chats/sessions.
-- **Settings:** Gateway connection configuration (URL, Token).
+## Navigation and Access
+Primary iOS navigation is role-aware and intentionally reduced to core destinations.
 
-*(Further features like Cron, Nodes, Skills, and Tools can be ported in subsequent phases.)*
+- Admin: `Dashboard`, `Agents`, `Sessions`, `Chat`, `Users`, `Settings`
+- Operator: `Dashboard`, `Agents`, `Sessions`, `Chat`
+- Basic: `Dashboard`, `Agents`, `Sessions`
+
+## Build and Test
+```bash
+cd /Users/bpc/Documents/GitHub/ios-management-platform
+swift build
+swift test
+```
+
+## Deploy to iPhone (Thin Path)
+This repo is SwiftPM-first. The thinnest repeatable device path is through Xcode’s package workspace.
+
+1. Open the package in Xcode:
+   - `File` -> `Open...` -> select `/Users/bpc/Documents/GitHub/ios-management-platform/Package.swift`
+2. Select the `OpenClawManagementIOS` scheme.
+3. Set destination to your connected iPhone.
+4. In `Signing & Capabilities`, choose your Apple Team for the generated app target.
+5. Build and Run.
+
+If Xcode asks to create signing artifacts, accept the prompts for your personal/team profile.
+
+## Manual QA Checklist
+- Connect in local mode and remote mode (`ws://`/`wss://`)
+- Sign in with an existing gateway user
+- Relaunch and confirm session restore
+- Verify dashboard presence updates
+- Verify agents list/detail loads from gateway
+- Verify sessions list and actions (`reset`, `compact`, `delete`)
+- Verify user CRUD/allowlist behavior with role restrictions
+- Verify iPhone portrait usability and keyboard behavior in login/settings
