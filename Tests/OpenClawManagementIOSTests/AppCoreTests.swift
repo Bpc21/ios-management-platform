@@ -234,6 +234,54 @@ final class AppCoreTests: XCTestCase {
         XCTAssertEqual(settings.gatewayPort, 443)
         XCTAssertEqual(settings.gatewayURL?.absoluteString, "wss://relay.tailnet.ts.net:443")
     }
+
+    func testConfigDataServiceNormalizesJSONBeforeSave() throws {
+        let text = """
+        {
+          "b": 2,
+          "a": {
+            "nested": true
+          }
+        }
+        """
+
+        let normalized = try ConfigDataService.normalizedRawJSON(from: text)
+        let data = try XCTUnwrap(normalized.data(using: .utf8))
+        let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertEqual(object?["b"] as? Int, 2)
+        let nested = object?["a"] as? [String: Any]
+        XCTAssertEqual(nested?["nested"] as? Bool, true)
+    }
+
+    func testOperationalCoreStorePersistsAcrossInstances() {
+        let suiteName = "OpenClawManagementIOSTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let first = OperationalCoreStore(defaults: defaults)
+        _ = first.createTask(
+            title: "Investigate gateway alert",
+            descriptionText: "Review notifications and logs",
+            priority: .high,
+            status: .inProgress,
+            assignedAgentId: "dev-director")
+        _ = first.createWorkflow(
+            name: "Incident triage",
+            descriptionText: "Escalation flow",
+            stages: [
+                WorkflowStageItem(id: "stage-1", name: "Detect", role: "operator", orderIndex: 0),
+                WorkflowStageItem(id: "stage-2", name: "Mitigate", role: "operator", orderIndex: 1),
+            ])
+        _ = first.createKnowledgeEntry(title: "Runbook", content: "Restart worker and verify health")
+
+        let second = OperationalCoreStore(defaults: defaults)
+        XCTAssertEqual(second.tasks.count, 1)
+        XCTAssertEqual(second.tasks.first?.title, "Investigate gateway alert")
+        XCTAssertEqual(second.workflows.count, 1)
+        XCTAssertEqual(second.workflows.first?.name, "Incident triage")
+        XCTAssertEqual(second.knowledgeEntries.count, 1)
+        XCTAssertEqual(second.knowledgeEntries.first?.title, "Runbook")
+    }
 }
 
 private extension AppCoreTests {
