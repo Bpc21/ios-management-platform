@@ -158,7 +158,9 @@ struct ConnectionSettingsView: View {
             if normalizedHost.isEmpty {
                 return "Invalid gateway URL. Local mode requires a gateway host."
             }
-            let portValue = Int(port) ?? settings.gatewayPort
+            guard let portValue = Int(port), (1...65535).contains(portValue) else {
+                return "Invalid local port. Enter a number between 1 and 65535."
+            }
             let scheme = useTLS ? "wss" : "ws"
             let raw = "\(scheme)://\(normalizedHost):\(portValue)"
             if SettingsStore.validWebSocketURL(raw) == nil {
@@ -186,7 +188,9 @@ struct ConnectionSettingsView: View {
         settings.remoteURL = remoteURL.trimmingCharacters(in: .whitespacesAndNewlines)
         settings.remoteSSHTarget = remoteSSHTarget.trimmingCharacters(in: .whitespacesAndNewlines)
         settings.gatewayHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
-        settings.gatewayPort = Int(port) ?? settings.gatewayPort
+        if let portValue = Int(port), (1...65535).contains(portValue) {
+            settings.gatewayPort = portValue
+        }
         settings.gatewayUseTLS = useTLS
         settings.autoConnect = autoConnect
         settings.saveToken(token.trimmingCharacters(in: .whitespacesAndNewlines))
