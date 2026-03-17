@@ -10,7 +10,7 @@ targets:
     type: application
     platform: iOS
     info:
-      path: null
+      path: Info.plist
       properties:
         CFBundleDisplayName: OpenClaw iOS
         UILaunchScreen: {}

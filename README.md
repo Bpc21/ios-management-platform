@@ -38,16 +38,36 @@ swift test
 ```
 
 ## Deploy to iPhone (Thin Path)
-This repo is SwiftPM-first. The thinnest repeatable device path is through Xcode’s package workspace.
+This repo now includes a minimal app wrapper target in `ios-app/` for repeatable physical-device deploys.
 
-1. Open the package in Xcode:
-   - `File` -> `Open...` -> select `/Users/bpc/Documents/GitHub/ios-management-platform/Package.swift`
-2. Select the `OpenClawManagementIOS` scheme.
-3. Set destination to your connected iPhone.
-4. In `Signing & Capabilities`, choose your Apple Team for the generated app target.
-5. Build and Run.
+CLI flow:
+```bash
+cd /Users/bpc/Documents/GitHub/ios-management-platform
+cd ios-app && xcodegen generate
+cd ..
+xcodebuild \
+  -project ios-app/OpenClawManagementIOSApp.xcodeproj \
+  -scheme OpenClawManagementIOSApp \
+  -destination 'id=<YOUR_DEVICE_UDID>' \
+  -configuration Debug \
+  -derivedDataPath build/RunnerDerivedData \
+  -allowProvisioningUpdates \
+  -allowProvisioningDeviceRegistration \
+  build
+xcrun devicectl device install app \
+  --device <YOUR_DEVICE_UDID> \
+  build/RunnerDerivedData/Build/Products/Debug-iphoneos/OpenClawManagementIOSApp.app
+xcrun devicectl device process launch \
+  --device <YOUR_DEVICE_UDID> \
+  ai.openclaw.ios.test.bpc \
+  --terminate-existing --activate
+```
 
-If Xcode asks to create signing artifacts, accept the prompts for your personal/team profile.
+Xcode flow (alternative):
+1. Open `/Users/bpc/Documents/GitHub/ios-management-platform/ios-app/OpenClawManagementIOSApp.xcodeproj`
+2. Select scheme `OpenClawManagementIOSApp`
+3. Pick your iPhone destination
+4. Build and Run
 
 ## Manual QA Checklist
 - Connect in local mode and remote mode (`ws://`/`wss://`)
