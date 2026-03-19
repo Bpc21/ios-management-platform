@@ -197,8 +197,24 @@ struct UsersView: View {
             async let allowlist = usersService.loadOverview(gateway: gateway)
             
             let (fetchedUsers, fetchedAllowlist) = try await (users, allowlist)
-            
-            self.platformUsers = fetchedUsers
+
+            if let currentUser = auth.currentUser {
+                self.platformUsers = fetchedUsers.map { user in
+                    guard user.id == currentUser.id else { return user }
+                    let currentPhone = user.phone?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    if currentPhone.isEmpty,
+                       let fallbackPhone = currentUser.phone?.trimmingCharacters(in: .whitespacesAndNewlines),
+                       !fallbackPhone.isEmpty
+                    {
+                        var merged = user
+                        merged.phone = fallbackPhone
+                        return merged
+                    }
+                    return user
+                }
+            } else {
+                self.platformUsers = fetchedUsers
+            }
             self.allowlistData = fetchedAllowlist
         } catch {
             self.errorText = error.localizedDescription

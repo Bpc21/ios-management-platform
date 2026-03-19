@@ -5,6 +5,27 @@ enum AppUserRole: String, Codable, CaseIterable, Sendable {
     case `operator`
     case basic
 
+    var gatewayValue: String {
+        switch self {
+        case .admin: "admin"
+        case .operator: "manager"
+        case .basic: "viewer"
+        }
+    }
+
+    static func fromGateway(_ rawValue: String?) -> AppUserRole {
+        switch rawValue?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "admin":
+            return .admin
+        case "manager", "operator":
+            return .operator
+        case "viewer", "basic":
+            return .basic
+        default:
+            return .basic
+        }
+    }
+
     var label: String {
         switch self {
         case .admin: "Admin"

@@ -151,6 +151,193 @@ final class AppCoreTests: XCTestCase {
         XCTAssertEqual(auth.currentUser?.phone, updatedPhone)
     }
 
+    func testAuthCreateUserMapsOperatorRoleToManager() async throws {
+        let settings = makeSettings()
+        let secureStore = InMemorySecureStringStore()
+
+        let auth = AuthService(
+            gateway: GatewayService(),
+            settings: settings,
+            secureStore: secureStore,
+            requestHandler: { method, body in
+                switch method {
+                case "auth.login":
+                    return [
+                        "token": "session-token",
+                        "user": Self.makeUserPayload(
+                            id: "u_admin",
+                            username: "admin",
+                            role: "admin",
+                            phone: nil,
+                            agentAssignments: ["dev-director"])
+                    ]
+                case "users.create":
+                    XCTAssertEqual(body["role"] as? String, "manager")
+                    return [
+                        "user": Self.makeUserPayload(
+                            id: "u_2",
+                            username: "new-operator",
+                            role: "manager",
+                            phone: nil,
+                            agentAssignments: ["dev-director"])
+                    ]
+                default:
+                    XCTFail("Unexpected method \(method)")
+                    return [:]
+                }
+            })
+
+        let loginSucceeded = await auth.login(username: "admin", password: "secret")
+        XCTAssertTrue(loginSucceeded)
+
+        let created = try await auth.createUser(
+            username: "new-operator",
+            displayName: "New Operator",
+            password: "pw",
+            role: .operator)
+
+        XCTAssertEqual(created.role, .operator)
+    }
+
+    func testAuthCreateUserMapsBasicRoleToViewer() async throws {
+        let settings = makeSettings()
+        let secureStore = InMemorySecureStringStore()
+
+        let auth = AuthService(
+            gateway: GatewayService(),
+            settings: settings,
+            secureStore: secureStore,
+            requestHandler: { method, body in
+                switch method {
+                case "auth.login":
+                    return [
+                        "token": "session-token",
+                        "user": Self.makeUserPayload(
+                            id: "u_admin",
+                            username: "admin",
+                            role: "admin",
+                            phone: nil,
+                            agentAssignments: ["dev-director"])
+                    ]
+                case "users.create":
+                    XCTAssertEqual(body["role"] as? String, "viewer")
+                    return [
+                        "user": Self.makeUserPayload(
+                            id: "u_3",
+                            username: "new-basic",
+                            role: "viewer",
+                            phone: nil,
+                            agentAssignments: [])
+                    ]
+                default:
+                    XCTFail("Unexpected method \(method)")
+                    return [:]
+                }
+            })
+
+        let loginSucceeded = await auth.login(username: "admin", password: "secret")
+        XCTAssertTrue(loginSucceeded)
+
+        let created = try await auth.createUser(
+            username: "new-basic",
+            displayName: "New Basic",
+            password: "pw",
+            role: .basic)
+
+        XCTAssertEqual(created.role, .basic)
+    }
+
+    func testAuthUpdateUserMapsBasicRoleToViewer() async throws {
+        let settings = makeSettings()
+        let secureStore = InMemorySecureStringStore()
+
+        let auth = AuthService(
+            gateway: GatewayService(),
+            settings: settings,
+            secureStore: secureStore,
+            requestHandler: { method, body in
+                switch method {
+                case "auth.login":
+                    return [
+                        "token": "session-token",
+                        "user": Self.makeUserPayload(
+                            id: "u_1",
+                            username: "alice",
+                            role: "admin",
+                            phone: nil,
+                            agentAssignments: ["dev-director"])
+                    ]
+                case "users.update":
+                    XCTAssertEqual(body["role"] as? String, "viewer")
+                    return [
+                        "user": Self.makeUserPayload(
+                            id: "u_1",
+                            username: "alice",
+                            role: "viewer",
+                            phone: nil,
+                            agentAssignments: ["dev-director"])
+                    ]
+                default:
+                    XCTFail("Unexpected method \(method)")
+                    return [:]
+                }
+            })
+
+        let loginSucceeded = await auth.login(username: "alice", password: "secret")
+        XCTAssertTrue(loginSucceeded)
+
+        let updated = try await auth.updateUser(auth.currentUser!, role: .basic)
+        XCTAssertEqual(updated.role, .basic)
+    }
+
+    func testAuthParsesGatewayAndLegacyRoleValues() async throws {
+        let settings = makeSettings()
+        let secureStore = InMemorySecureStringStore()
+
+        let auth = AuthService(
+            gateway: GatewayService(),
+            settings: settings,
+            secureStore: secureStore,
+            requestHandler: { method, body in
+                switch method {
+                case "auth.login":
+                    return [
+                        "token": "session-token",
+                        "user": Self.makeUserPayload(
+                            id: "u_admin",
+                            username: "admin",
+                            role: "admin",
+                            phone: nil,
+                            agentAssignments: ["dev-director"])
+                    ]
+                case "users.list":
+                    XCTAssertEqual(body["token"] as? String, "session-token")
+                    return [
+                        "users": [
+                            Self.makeUserPayload(id: "u1", username: "a1", role: "admin", phone: nil, agentAssignments: []),
+                            Self.makeUserPayload(id: "u2", username: "a2", role: "manager", phone: nil, agentAssignments: []),
+                            Self.makeUserPayload(id: "u3", username: "a3", role: "viewer", phone: nil, agentAssignments: []),
+                            Self.makeUserPayload(id: "u4", username: "a4", role: "operator", phone: nil, agentAssignments: []),
+                            Self.makeUserPayload(id: "u5", username: "a5", role: "basic", phone: nil, agentAssignments: []),
+                        ]
+                    ]
+                default:
+                    XCTFail("Unexpected method \(method)")
+                    return [:]
+                }
+            })
+
+        let loginSucceeded = await auth.login(username: "admin", password: "secret")
+        XCTAssertTrue(loginSucceeded)
+
+        let users = try await auth.allUsers()
+        XCTAssertEqual(users.first(where: { $0.id == "u1" })?.role, .admin)
+        XCTAssertEqual(users.first(where: { $0.id == "u2" })?.role, .operator)
+        XCTAssertEqual(users.first(where: { $0.id == "u3" })?.role, .basic)
+        XCTAssertEqual(users.first(where: { $0.id == "u4" })?.role, .operator)
+        XCTAssertEqual(users.first(where: { $0.id == "u5" })?.role, .basic)
+    }
+
     func testAuthUpdateUserFallsBackToUsersListOnAckOnlyResponse() async throws {
         let settings = makeSettings()
         let secureStore = InMemorySecureStringStore()
@@ -314,6 +501,74 @@ final class AppCoreTests: XCTestCase {
                         XCTAssertEqual(body["displayName"] as? String, nil)
                         XCTAssertEqual(body["role"] as? String, nil)
                         return ["ok": true]
+                    } else {
+                        XCTAssertEqual(body["phone"] as? String, targetPhone)
+                        XCTAssertEqual(body["displayName"] as? String, "Alice")
+                        XCTAssertEqual(body["role"] as? String, "admin")
+                        return ["ok": true]
+                    }
+                case "users.list":
+                    listRequests += 1
+                    let returnedPhone = listRequests == 1 ? nil : targetPhone
+                    return [
+                        "users": [
+                            Self.makeUserPayload(
+                                id: "u_1",
+                                username: "alice",
+                                role: "admin",
+                                phone: returnedPhone,
+                                agentAssignments: ["dev-director"])
+                        ]
+                    ]
+                default:
+                    XCTFail("Unexpected method \(method)")
+                    return [:]
+                }
+            })
+
+        let loginSucceeded = await auth.login(username: "alice", password: "secret")
+        XCTAssertTrue(loginSucceeded)
+
+        let updated = try await auth.updateUser(auth.currentUser!, phone: targetPhone)
+        XCTAssertEqual(updateRequests, 2)
+        XCTAssertEqual(updated.phone, targetPhone)
+    }
+
+    func testAuthUpdateUserRetriesWhenParsedPayloadIsStale() async throws {
+        let settings = makeSettings()
+        let secureStore = InMemorySecureStringStore()
+        let targetPhone = "+15550002222"
+        var updateRequests = 0
+        var listRequests = 0
+
+        let auth = AuthService(
+            gateway: GatewayService(),
+            settings: settings,
+            secureStore: secureStore,
+            requestHandler: { method, body in
+                switch method {
+                case "auth.login":
+                    return [
+                        "token": "session-token",
+                        "user": Self.makeUserPayload(
+                            id: "u_1",
+                            username: "alice",
+                            role: "admin",
+                            phone: nil,
+                            agentAssignments: ["dev-director"])
+                    ]
+                case "users.update":
+                    updateRequests += 1
+                    if updateRequests == 1 {
+                        XCTAssertEqual(body["phone"] as? String, targetPhone)
+                        return [
+                            "user": Self.makeUserPayload(
+                                id: "u_1",
+                                username: "alice",
+                                role: "admin",
+                                phone: nil,
+                                agentAssignments: ["dev-director"])
+                        ]
                     } else {
                         XCTAssertEqual(body["phone"] as? String, targetPhone)
                         XCTAssertEqual(body["displayName"] as? String, "Alice")

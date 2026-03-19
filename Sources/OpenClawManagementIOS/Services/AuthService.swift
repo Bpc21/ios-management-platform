@@ -112,7 +112,7 @@ final class AuthService {
             "username": trimmedUsername,
             "displayName": trimmedDisplayName,
             "password": password,
-            "role": role.rawValue,
+            "role": role.gatewayValue,
         ]
         if let normalizedPhone {
             body["phone"] = normalizedPhone
@@ -146,7 +146,7 @@ final class AuthService {
             }
         }
         if let role {
-            body["role"] = role.rawValue
+            body["role"] = role.gatewayValue
         }
         if let phone {
             if let normalized = normalizePhone(phone) {
@@ -159,7 +159,52 @@ final class AuthService {
         let payload = try await requestObject(method: "users.update", body: body)
         let updated: AppUser
         if let parsed = (try? Self.parseUserIfPresent(in: payload)) ?? nil {
-            updated = parsed
+            if matchesExpectedUpdate(
+                parsed,
+                expectedDisplayName: intendedDisplayName,
+                expectedRole: intendedRole,
+                expectedPhone: intendedPhone)
+            {
+                updated = parsed
+            } else {
+                guard let refreshed = try await fetchUser(id: user.id) else {
+                    throw AuthError.invalidResponse("users.update succeeded but no updated user payload was returned")
+                }
+                if !matchesExpectedUpdate(
+                    refreshed,
+                    expectedDisplayName: intendedDisplayName,
+                    expectedRole: intendedRole,
+                    expectedPhone: intendedPhone)
+                {
+                    let fallbackPayload = try await requestObject(
+                        method: "users.update",
+                        body: makeFallbackUpdateBody(
+                            user: user,
+                            displayName: intendedDisplayName,
+                            password: password,
+                            role: intendedRole,
+                            phone: intendedPhone))
+
+                    if let parsedUser = try? Self.parseUserIfPresent(in: fallbackPayload) {
+                        updated = parsedUser
+                    } else {
+                        guard let fallbackRefreshed = try await fetchUser(id: user.id) else {
+                            throw AuthError.invalidResponse("users.update fallback did not return updated user")
+                        }
+                        guard matchesExpectedUpdate(
+                            fallbackRefreshed,
+                            expectedDisplayName: intendedDisplayName,
+                            expectedRole: intendedRole,
+                            expectedPhone: intendedPhone)
+                        else {
+                            throw AuthError.invalidResponse("users.update fallback did not persist requested fields")
+                        }
+                        updated = fallbackRefreshed
+                    }
+                } else {
+                    updated = refreshed
+                }
+            }
         } else {
             guard let refreshed = try await fetchUser(id: user.id) else {
                 throw AuthError.invalidResponse("users.update succeeded but no updated user payload was returned")
@@ -358,7 +403,7 @@ final class AuthService {
         var body: [String: Any] = [
             "id": user.id,
             "displayName": (displayName ?? user.displayName).trimmingCharacters(in: .whitespacesAndNewlines),
-            "role": (role ?? user.role).rawValue,
+            "role": (role ?? user.role).gatewayValue,
         ]
 
         if let password {
@@ -411,7 +456,7 @@ final class AuthService {
             ?? asString(object["name"])
             ?? username
 
-        let role = AppUserRole(rawValue: asString(object["role"]) ?? "") ?? .basic
+        let role = AppUserRole.fromGateway(asString(object["role"]))
         let phone = asString(object["phone"])
         let isAllowlisted = asBool(object["isAllowlisted"]) ?? false
         let createdAt = asDate(object["createdAt"]) ?? .now
