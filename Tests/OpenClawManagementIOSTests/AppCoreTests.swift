@@ -423,6 +423,21 @@ final class AppCoreTests: XCTestCase {
         XCTAssertEqual(settings.gatewayURL?.absoluteString, "wss://relay.tailnet.ts.net:443")
     }
 
+    func testSettingsStoreSwitchesToRemoteWhenLocalModeIsStaleAndRemoteURLExists() {
+        let suiteName = "OpenClawManagementIOSTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set("local", forKey: "gateway.connectionMode")
+        defaults.set("", forKey: "gateway.host")
+        defaults.set("gateway.tailnet.ts.net", forKey: "gateway.remote.url")
+
+        let settings = SettingsStore(defaults: defaults, secureStore: InMemorySecureStringStore())
+
+        XCTAssertEqual(settings.connectionMode, .remote)
+        XCTAssertEqual(settings.remoteURL, "wss://gateway.tailnet.ts.net")
+        XCTAssertEqual(settings.gatewayURL?.absoluteString, "wss://gateway.tailnet.ts.net")
+    }
+
     func testConfigDataServiceNormalizesJSONBeforeSave() throws {
         let text = """
         {

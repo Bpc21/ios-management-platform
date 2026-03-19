@@ -13,6 +13,7 @@ struct LoginView: View {
     @State private var username = ""
     @State private var password = ""
     @State private var isLoading = false
+    @State private var showingConnectionSettings = false
     @FocusState private var focusedField: Field?
 
     var body: some View {
@@ -128,6 +129,12 @@ struct LoginView: View {
                                 || password.isEmpty
                                 || isLoading
                         )
+
+                        Button("Connection Settings") {
+                            showingConnectionSettings = true
+                        }
+                        .font(OC.Typography.caption)
+                        .foregroundStyle(OC.Colors.textSecondary)
                     }
                     .padding(OC.Spacing.lg)
                     .background(OC.Colors.surfaceElevated)
@@ -144,11 +151,28 @@ struct LoginView: View {
         }
         .onAppear {
             focusedField = .username
+            if settings.gatewayURL == nil {
+                showingConnectionSettings = true
+            }
             // Attempt gateway connect if not yet connected
             if !gateway.connectionState.isConnected, settings.gatewayURL != nil {
                 Task {
                     await gateway.connect(settings: settings)
                 }
+            }
+        }
+        .sheet(isPresented: $showingConnectionSettings) {
+            NavigationStack {
+                ConnectionSettingsView()
+                    .navigationTitle("Connection Settings")
+                    .ocNavigationBarTitleDisplayModeInline()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                showingConnectionSettings = false
+                            }
+                        }
+                    }
             }
         }
     }

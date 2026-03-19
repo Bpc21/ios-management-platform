@@ -124,7 +124,7 @@ final class SettingsStore {
         self.gatewayHost = defaults.string(forKey: "gateway.host") ?? ""
         self.gatewayPort = defaults.integer(forKey: "gateway.port").nonZero ?? 443
         self.gatewayUseTLS = defaults.object(forKey: "gateway.useTLS") as? Bool ?? true
-        self.connectionMode = ConnectionMode(rawValue: defaults.string(forKey: "gateway.connectionMode") ?? "") ?? .local
+        self.connectionMode = ConnectionMode(rawValue: defaults.string(forKey: "gateway.connectionMode") ?? "") ?? .remote
         self.remoteTransport = RemoteTransport(rawValue: defaults.string(forKey: "gateway.remote.transport") ?? "") ?? .direct
         self.remoteURL = defaults.string(forKey: "gateway.remote.url") ?? ""
         self.remoteSSHTarget = defaults.string(forKey: "gateway.remote.sshTarget") ?? ""
@@ -137,6 +137,7 @@ final class SettingsStore {
 
         self.ensureInstanceId()
         self.performLegacyIOSGatewayImportIfNeeded()
+        self.normalizeConnectionModeForCurrentConfiguration()
     }
 
     init(defaults: UserDefaults, secureStore: any SecureStringStore) {
@@ -146,7 +147,7 @@ final class SettingsStore {
         self.gatewayHost = defaults.string(forKey: "gateway.host") ?? ""
         self.gatewayPort = defaults.integer(forKey: "gateway.port").nonZero ?? 443
         self.gatewayUseTLS = defaults.object(forKey: "gateway.useTLS") as? Bool ?? true
-        self.connectionMode = ConnectionMode(rawValue: defaults.string(forKey: "gateway.connectionMode") ?? "") ?? .local
+        self.connectionMode = ConnectionMode(rawValue: defaults.string(forKey: "gateway.connectionMode") ?? "") ?? .remote
         self.remoteTransport = RemoteTransport(rawValue: defaults.string(forKey: "gateway.remote.transport") ?? "") ?? .direct
         self.remoteURL = defaults.string(forKey: "gateway.remote.url") ?? ""
         self.remoteSSHTarget = defaults.string(forKey: "gateway.remote.sshTarget") ?? ""
@@ -159,6 +160,7 @@ final class SettingsStore {
 
         self.ensureInstanceId()
         self.performLegacyIOSGatewayImportIfNeeded()
+        self.normalizeConnectionModeForCurrentConfiguration()
     }
 
     var gatewayURL: URL? {
@@ -334,6 +336,20 @@ final class SettingsStore {
         gatewayHost = host
         gatewayPort = resolvedPort
         gatewayUseTLS = useTLS
+    }
+
+    private func normalizeConnectionModeForCurrentConfiguration() {
+        let trimmedLocalHost = gatewayHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedRemote = Self.normalizedRemoteURL(remoteURL)
+        let hasValidRemote = !normalizedRemote.isEmpty && Self.validWebSocketURL(normalizedRemote) != nil
+
+        if normalizedRemote != remoteURL {
+            remoteURL = normalizedRemote
+        }
+
+        if connectionMode == .local, trimmedLocalHost.isEmpty, hasValidRemote {
+            connectionMode = .remote
+        }
     }
 }
 
