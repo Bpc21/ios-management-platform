@@ -10,7 +10,6 @@ struct ChatContainerView: View {
     @State private var transport: OperatorChatTransport?
     @State private var chatViewModel: OpenClawChatViewModel?
     @State private var selectedAgentId = ""
-    @State private var selectedAgentContext = SelectedChatAgentContext()
 
     var body: some View {
         NavigationStack {
@@ -73,10 +72,7 @@ struct ChatContainerView: View {
             await setupChat()
         }
         .onChange(of: selectedAgentId) {
-            Task {
-                await selectedAgentContext.setAgentId(selectedAgentId.isEmpty ? nil : selectedAgentId)
-                rebuildChatViewModel()
-            }
+            rebuildChatViewModel()
         }
         .onChange(of: gateway.agents.count) {
             applyDefaultSelectionIfNeeded()
@@ -97,10 +93,9 @@ struct ChatContainerView: View {
 
         await gateway.refreshAgents()
         applyDefaultSelectionIfNeeded()
-        await selectedAgentContext.setAgentId(selectedAgentId.isEmpty ? nil : selectedAgentId)
 
         if transport == nil {
-            transport = OperatorChatTransport(gateway: gateway.session, selectedAgentContext: selectedAgentContext)
+            transport = OperatorChatTransport(gateway: gateway.session)
         }
         rebuildChatViewModel()
     }

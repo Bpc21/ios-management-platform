@@ -29,6 +29,23 @@ final class AppCoreTests: XCTestCase {
         XCTAssertEqual(settings.gatewayURL?.absoluteString, "ws://localhost:19789")
     }
 
+    func testSettingsStorePersistsAppearanceAndMiniverseFlags() {
+        let suiteName = "OpenClawManagementIOSTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let settings = SettingsStore(defaults: defaults, secureStore: InMemorySecureStringStore())
+        settings.isDarkMode = false
+        settings.miniverseEnabled = true
+
+        let reloaded = SettingsStore(defaults: defaults, secureStore: InMemorySecureStringStore())
+        XCTAssertFalse(reloaded.isDarkMode)
+        XCTAssertTrue(reloaded.miniverseEnabled)
+    }
+
     func testAuthLoginAndCachedRestoreWhenGatewayUnavailable() async {
         let settings = makeSettings()
         let secureStore = InMemorySecureStringStore()
@@ -648,19 +665,28 @@ final class AppCoreTests: XCTestCase {
         XCTAssertEqual(ChatAgentAccess.visibleAgents(allAgents, for: basic).map(\.id), ["alpha"])
     }
 
-    func testOperatorChatTransportIncludesSelectedAgentInParams() {
+    func testChatAgentAccessBuildsAgentScopedSessionKey() {
+        XCTAssertEqual(ChatAgentAccess.sessionKey(for: nil), "main")
+        XCTAssertEqual(ChatAgentAccess.sessionKey(for: "   "), "main")
+        XCTAssertEqual(ChatAgentAccess.sessionKey(for: "alpha"), "agent:alpha:main")
+    }
+
+    func testOperatorChatTransportSendParamsDoNotIncludeAgentId() throws {
         let payload = OperatorChatTransport.makeSendParams(
             sessionKey: "agent:alpha:main",
             message: "hello",
             thinking: "medium",
-            agentId: "alpha",
             attachments: nil,
             timeoutMs: 30000,
             idempotencyKey: "run_1")
 
+        let data = try JSONEncoder().encode(payload)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
         XCTAssertEqual(payload.sessionKey, "agent:alpha:main")
-        XCTAssertEqual(payload.agentId, "alpha")
         XCTAssertEqual(payload.message, "hello")
+        XCTAssertEqual(object["sessionKey"] as? String, "agent:alpha:main")
+        XCTAssertNil(object["agentId"])
     }
 }
 

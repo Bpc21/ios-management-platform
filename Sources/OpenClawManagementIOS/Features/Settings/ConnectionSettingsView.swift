@@ -21,6 +21,7 @@ struct ConnectionSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: OC.Spacing.xl) {
                 statusHeader
+                appearanceCard
                 connectionCard
                 if case .error(let message) = gateway.connectionState {
                     Text(message)
@@ -51,6 +52,32 @@ struct ConnectionSettingsView: View {
             }
         }
         .frame(maxWidth: .infinity)
+        .padding(.horizontal, OC.Spacing.md)
+    }
+
+    private var appearanceCard: some View {
+        VStack(alignment: .leading, spacing: OC.Spacing.md) {
+            Text("Appearance")
+                .font(OC.Typography.h3)
+                .foregroundStyle(OC.Colors.textPrimary)
+
+            Toggle(isOn: Binding(
+                get: { settings.isDarkMode },
+                set: { settings.isDarkMode = $0 })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Dark mode")
+                        .font(OC.Typography.bodyDefault)
+                        .foregroundStyle(OC.Colors.textPrimary)
+                    Text("Uses the shared Broder Labs glass theme in light or dark appearance.")
+                        .font(OC.Typography.caption)
+                        .foregroundStyle(OC.Colors.textTertiary)
+                }
+            }
+            .toggleStyle(.switch)
+            .tint(OC.Colors.accent)
+        }
+        .ocCard()
+        .padding(.horizontal, OC.Spacing.md)
     }
 
     private var connectionCard: some View {
